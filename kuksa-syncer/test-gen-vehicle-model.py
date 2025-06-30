@@ -1,3 +1,11 @@
+# Copyright (c) 2025 Eclipse Foundation.
+# 
+# This program and the accompanying materials are made available under the
+# terms of the Apache License, Version 2.0 which is available at
+# https://www.apache.org/licenses/LICENSE-2.0.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 from vehicle_model_manager import generate_vehicle_model, revert_vehicle_model
 # from utils import restartMockProvider
 import time
