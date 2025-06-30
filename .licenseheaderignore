@@ -1,0 +1,89 @@
+# License Header Ignore File for sdv-runtime
+# This file documents which files/directories should be excluded from license header additions
+# Format similar to .gitignore
+
+# Third-party bundled dependencies
+data/python-packages/
+data/python-packages/**
+
+# Node.js dependencies (if any)
+node_modules/
+node_modules/**
+
+# Build artifacts and generated files
+build/
+dist/
+*.generated.*
+*.d.ts.map
+
+# Binary and media files
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.ico
+*.pdf
+*.ttf
+*.woff
+*.woff2
+
+# Data files (JSON, XML that don't contain code)
+data/vss-core/*.json
+*.json
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Git and version control
+.git/
+.gitmodules
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Documentation files (markdown typically doesn't need headers)
+*.md
+README*
+CHANGELOG*
+CONTRIBUTING*
+
+# License and legal files
+LICENSE
+NOTICE
+COPYING
+
+# Configuration files that are purely data
+.eslintrc.json
+.prettierrc.json
+.lintstagedrc.json
+tsconfig.json
+components.json
+ecosystem.config.json
+
+# Files with existing copyright that should be preserved
+# (These are documented but not automatically excluded)
+# - Files with Robert Bosch GmbH copyright
+# - Files with existing Eclipse Foundation copyright from previous years
+
+# Submodules (handled separately)
+inventory/
+inventory/**
+
+# Test data and fixtures
+test-data/
+fixtures/
+*.fixture.*
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
