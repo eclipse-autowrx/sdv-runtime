@@ -1,0 +1,23 @@
+# Diagnostics Extension Overlay
+# Extends Vehicle with custom diagnostic signals beyond standard OBD
+
+Vehicle:
+  type: branch
+  description: High-level vehicle data.
+
+Vehicle.Diagnostics:
+  type: branch
+  description: Extended diagnostic information beyond OBD
+  comment: Custom diagnostic signals for enhanced vehicle monitoring
+
+Vehicle.Diagnostics.DTCCount:
+  type: sensor
+  datatype: uint8
+  description: Number of Diagnostic Trouble Codes (DTC)
+  comment: Count of currently active diagnostic trouble codes
+
+Vehicle.Diagnostics.DTCList:
+  type: sensor
+  datatype: string[]
+  description: List of currently active DTCs formatted according OBD II (SAE-J2012DA_201812) standard ([P|C|B|U]XXXXX )
+  comment: Array of diagnostic trouble codes in standard OBD-II format

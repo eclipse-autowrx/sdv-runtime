@@ -1,0 +1,355 @@
+# Occupant Extension Overlay
+# Extends Vehicle with detailed occupant information for each seat
+
+Vehicle:
+  type: branch
+  description: High-level vehicle data.
+
+Vehicle.Occupant:
+  type: branch
+  description: Detailed occupant information for each seat position
+  comment: Enhanced occupant monitoring and identification system
+
+Vehicle.Occupant.Row1:
+  type: branch
+  description: Occupant (Driver or Passenger) data for first row
+
+Vehicle.Occupant.Row1.DriverSide:
+  type: branch
+  description: Driver side occupant information
+
+Vehicle.Occupant.Row1.DriverSide.HeadPosition:
+  type: branch
+  description: The current position of the driver head on vehicle axis according to ISO 23150:2023
+
+Vehicle.Occupant.Row1.DriverSide.HeadPosition.X:
+  type: sensor
+  datatype: float
+  description: Head position X coordinate
+  unit: mm
+
+Vehicle.Occupant.Row1.DriverSide.HeadPosition.Y:
+  type: sensor
+  datatype: float
+  description: Head position Y coordinate
+  unit: mm
+
+Vehicle.Occupant.Row1.DriverSide.HeadPosition.Z:
+  type: sensor
+  datatype: float
+  description: Head position Z coordinate
+  unit: mm
+
+Vehicle.Occupant.Row1.DriverSide.Identifier:
+  type: branch
+  description: Identifier attributes based on OAuth 2.0
+
+Vehicle.Occupant.Row1.DriverSide.Identifier.Issuer:
+  type: sensor
+  datatype: string
+  description: Unique Issuer for the authentication of the occupant e.g. https://accounts.funcorp.com
+
+Vehicle.Occupant.Row1.DriverSide.Identifier.Subject:
+  type: sensor
+  datatype: string
+  description: Subject for the authentication of the occupant e.g. UserID 7331677
+
+Vehicle.Occupant.Row1.DriverSide.MidEyeGaze:
+  type: branch
+  description: Direction from mid eye position to object driver is looking at
+
+Vehicle.Occupant.Row1.DriverSide.MidEyeGaze.Yaw:
+  type: sensor
+  datatype: float
+  description: Gaze yaw angle
+  unit: degrees
+
+Vehicle.Occupant.Row1.DriverSide.MidEyeGaze.Pitch:
+  type: sensor
+  datatype: float
+  description: Gaze pitch angle
+  unit: degrees
+
+Vehicle.Occupant.Row1.Middle:
+  type: branch
+  description: Middle seat occupant information
+
+Vehicle.Occupant.Row1.Middle.HeadPosition:
+  type: branch
+  description: The current position of the middle seat occupant head
+
+Vehicle.Occupant.Row1.Middle.HeadPosition.X:
+  type: sensor
+  datatype: float
+  description: Head position X coordinate
+  unit: mm
+
+Vehicle.Occupant.Row1.Middle.HeadPosition.Y:
+  type: sensor
+  datatype: float
+  description: Head position Y coordinate
+  unit: mm
+
+Vehicle.Occupant.Row1.Middle.HeadPosition.Z:
+  type: sensor
+  datatype: float
+  description: Head position Z coordinate
+  unit: mm
+
+Vehicle.Occupant.Row1.Middle.Identifier:
+  type: branch
+  description: Identifier attributes based on OAuth 2.0
+
+Vehicle.Occupant.Row1.Middle.Identifier.Issuer:
+  type: sensor
+  datatype: string
+  description: Unique Issuer for the authentication of the occupant
+
+Vehicle.Occupant.Row1.Middle.Identifier.Subject:
+  type: sensor
+  datatype: string
+  description: Subject for the authentication of the occupant
+
+Vehicle.Occupant.Row1.Middle.MidEyeGaze:
+  type: branch
+  description: Direction from mid eye position to object occupant is looking at
+
+Vehicle.Occupant.Row1.Middle.MidEyeGaze.Yaw:
+  type: sensor
+  datatype: float
+  description: Gaze yaw angle
+  unit: degrees
+
+Vehicle.Occupant.Row1.Middle.MidEyeGaze.Pitch:
+  type: sensor
+  datatype: float
+  description: Gaze pitch angle
+  unit: degrees
+
+Vehicle.Occupant.Row1.PassengerSide:
+  type: branch
+  description: Passenger side occupant information
+
+Vehicle.Occupant.Row1.PassengerSide.HeadPosition:
+  type: branch
+  description: The current position of the passenger head
+
+Vehicle.Occupant.Row1.PassengerSide.HeadPosition.X:
+  type: sensor
+  datatype: float
+  description: Head position X coordinate
+  unit: mm
+
+Vehicle.Occupant.Row1.PassengerSide.HeadPosition.Y:
+  type: sensor
+  datatype: float
+  description: Head position Y coordinate
+  unit: mm
+
+Vehicle.Occupant.Row1.PassengerSide.HeadPosition.Z:
+  type: sensor
+  datatype: float
+  description: Head position Z coordinate
+  unit: mm
+
+Vehicle.Occupant.Row1.PassengerSide.Identifier:
+  type: branch
+  description: Identifier attributes based on OAuth 2.0
+
+Vehicle.Occupant.Row1.PassengerSide.Identifier.Issuer:
+  type: sensor
+  datatype: string
+  description: Unique Issuer for the authentication of the occupant
+
+Vehicle.Occupant.Row1.PassengerSide.Identifier.Subject:
+  type: sensor
+  datatype: string
+  description: Subject for the authentication of the occupant
+
+Vehicle.Occupant.Row1.PassengerSide.MidEyeGaze:
+  type: branch
+  description: Direction from mid eye position to object occupant is looking at
+
+Vehicle.Occupant.Row1.PassengerSide.MidEyeGaze.Yaw:
+  type: sensor
+  datatype: float
+  description: Gaze yaw angle
+  unit: degrees
+
+Vehicle.Occupant.Row1.PassengerSide.MidEyeGaze.Pitch:
+  type: sensor
+  datatype: float
+  description: Gaze pitch angle
+  unit: degrees
+
+Vehicle.Occupant.Row2:
+  type: branch
+  description: Occupant (Driver or Passenger) data for second row
+
+Vehicle.Occupant.Row2.DriverSide:
+  type: branch
+  description: Driver side occupant information for second row
+
+Vehicle.Occupant.Row2.DriverSide.HeadPosition:
+  type: branch
+  description: The current position of the occupant head
+
+Vehicle.Occupant.Row2.DriverSide.HeadPosition.X:
+  type: sensor
+  datatype: float
+  description: Head position X coordinate
+  unit: mm
+
+Vehicle.Occupant.Row2.DriverSide.HeadPosition.Y:
+  type: sensor
+  datatype: float
+  description: Head position Y coordinate
+  unit: mm
+
+Vehicle.Occupant.Row2.DriverSide.HeadPosition.Z:
+  type: sensor
+  datatype: float
+  description: Head position Z coordinate
+  unit: mm
+
+Vehicle.Occupant.Row2.DriverSide.Identifier:
+  type: branch
+  description: Identifier attributes based on OAuth 2.0
+
+Vehicle.Occupant.Row2.DriverSide.Identifier.Issuer:
+  type: sensor
+  datatype: string
+  description: Unique Issuer for the authentication of the occupant
+
+Vehicle.Occupant.Row2.DriverSide.Identifier.Subject:
+  type: sensor
+  datatype: string
+  description: Subject for the authentication of the occupant
+
+Vehicle.Occupant.Row2.DriverSide.MidEyeGaze:
+  type: branch
+  description: Direction from mid eye position to object occupant is looking at
+
+Vehicle.Occupant.Row2.DriverSide.MidEyeGaze.Yaw:
+  type: sensor
+  datatype: float
+  description: Gaze yaw angle
+  unit: degrees
+
+Vehicle.Occupant.Row2.DriverSide.MidEyeGaze.Pitch:
+  type: sensor
+  datatype: float
+  description: Gaze pitch angle
+  unit: degrees
+
+Vehicle.Occupant.Row2.Middle:
+  type: branch
+  description: Middle seat occupant information for second row
+
+Vehicle.Occupant.Row2.Middle.HeadPosition:
+  type: branch
+  description: The current position of the occupant head
+
+Vehicle.Occupant.Row2.Middle.HeadPosition.X:
+  type: sensor
+  datatype: float
+  description: Head position X coordinate
+  unit: mm
+
+Vehicle.Occupant.Row2.Middle.HeadPosition.Y:
+  type: sensor
+  datatype: float
+  description: Head position Y coordinate
+  unit: mm
+
+Vehicle.Occupant.Row2.Middle.HeadPosition.Z:
+  type: sensor
+  datatype: float
+  description: Head position Z coordinate
+  unit: mm
+
+Vehicle.Occupant.Row2.Middle.Identifier:
+  type: branch
+  description: Identifier attributes based on OAuth 2.0
+
+Vehicle.Occupant.Row2.Middle.Identifier.Issuer:
+  type: sensor
+  datatype: string
+  description: Unique Issuer for the authentication of the occupant
+
+Vehicle.Occupant.Row2.Middle.Identifier.Subject:
+  type: sensor
+  datatype: string
+  description: Subject for the authentication of the occupant
+
+Vehicle.Occupant.Row2.Middle.MidEyeGaze:
+  type: branch
+  description: Direction from mid eye position to object occupant is looking at
+
+Vehicle.Occupant.Row2.Middle.MidEyeGaze.Yaw:
+  type: sensor
+  datatype: float
+  description: Gaze yaw angle
+  unit: degrees
+
+Vehicle.Occupant.Row2.Middle.MidEyeGaze.Pitch:
+  type: sensor
+  datatype: float
+  description: Gaze pitch angle
+  unit: degrees
+
+Vehicle.Occupant.Row2.PassengerSide:
+  type: branch
+  description: Passenger side occupant information for second row
+
+Vehicle.Occupant.Row2.PassengerSide.HeadPosition:
+  type: branch
+  description: The current position of the occupant head
+
+Vehicle.Occupant.Row2.PassengerSide.HeadPosition.X:
+  type: sensor
+  datatype: float
+  description: Head position X coordinate
+  unit: mm
+
+Vehicle.Occupant.Row2.PassengerSide.HeadPosition.Y:
+  type: sensor
+  datatype: float
+  description: Head position Y coordinate
+  unit: mm
+
+Vehicle.Occupant.Row2.PassengerSide.HeadPosition.Z:
+  type: sensor
+  datatype: float
+  description: Head position Z coordinate
+  unit: mm
+
+Vehicle.Occupant.Row2.PassengerSide.Identifier:
+  type: branch
+  description: Identifier attributes based on OAuth 2.0
+
+Vehicle.Occupant.Row2.PassengerSide.Identifier.Issuer:
+  type: sensor
+  datatype: string
+  description: Unique Issuer for the authentication of the occupant
+
+Vehicle.Occupant.Row2.PassengerSide.Identifier.Subject:
+  type: sensor
+  datatype: string
+  description: Subject for the authentication of the occupant
+
+Vehicle.Occupant.Row2.PassengerSide.MidEyeGaze:
+  type: branch
+  description: Direction from mid eye position to object occupant is looking at
+
+Vehicle.Occupant.Row2.PassengerSide.MidEyeGaze.Yaw:
+  type: sensor
+  datatype: float
+  description: Gaze yaw angle
+  unit: degrees
+
+Vehicle.Occupant.Row2.PassengerSide.MidEyeGaze.Pitch:
+  type: sensor
+  datatype: float
+  description: Gaze pitch angle
+  unit: degrees

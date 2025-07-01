@@ -1,0 +1,32 @@
+# Passenger Extension Overlay
+# Extends Vehicle with passenger-specific signals
+
+Vehicle:
+  type: branch
+  description: High-level vehicle data.
+
+Vehicle.Passenger:
+  type: branch
+  description: Passenger-specific information and metrics
+  comment: Custom passenger signals for enhanced occupant monitoring
+
+Vehicle.Passenger.Age:
+  type: sensor
+  datatype: uint8
+  description: Age
+  comment: Current passenger age
+  unit: years
+
+Vehicle.Passenger.Gender:
+  type: sensor
+  datatype: string
+  description: Gender
+  comment: Current passenger gender identification
+
+Vehicle.Passenger.KinetosisScore:
+  type: sensor
+  datatype: float
+  description: KinetosisScore
+  comment: Motion sickness susceptibility score for current passenger
+  min: 0.0
+  max: 10.0

@@ -2965,7 +2965,6 @@
                                         "datatype": "string",
                                         "description": "Time for last hmi action, formatted according to ISO 8601 with UTC time zone.",
                                         "type": "sensor",
-                                        "unit": "iso8601",
                                         "uuid": "19b4f7e950bc526f8c263b4cc5954960",
                                         "name": "Vehicle.Cabin.Infotainment.HMI.LastActionTime",
                                         "id": "9c3c65068cf75140e1beb7c4"
