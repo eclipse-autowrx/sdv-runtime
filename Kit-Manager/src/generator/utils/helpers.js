@@ -1,3 +1,11 @@
+// Copyright (c) 2025 Eclipse Foundation.
+// 
+// This program and the accompanying materials are made available under the
+// terms of the MIT License which is available at
+// https://opensource.org/licenses/MIT.
+//
+// SPDX-License-Identifier: MIT
+
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.encode = exports.decode = exports.delay = exports.insertClassDocString = exports.removeEmptyLines = exports.createMultilineStringFromArray = exports.createArrayFromMultilineString = exports.indentCodeSnippet = void 0;

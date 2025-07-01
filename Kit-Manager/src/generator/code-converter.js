@@ -1,17 +1,11 @@
-"use strict";
-// Copyright (c) 2022 Robert Bosch GmbH
-//
+// Copyright (c) 2025 Eclipse Foundation.
+// 
 // This program and the accompanying materials are made available under the
-// terms of the Apache License, Version 2.0 which is available at
-// https://www.apache.org/licenses/LICENSE-2.0.
+// terms of the MIT License which is available at
+// https://opensource.org/licenses/MIT.
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-// WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
-// License for the specific language governing permissions and limitations
-// under the License.
-//
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: MIT
+
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CodeConverter = exports.CodeContext = void 0;
 const create_code_snippet_1 = require("./pipeline/create-code-snippet");

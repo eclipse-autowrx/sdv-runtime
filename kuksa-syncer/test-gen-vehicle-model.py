@@ -1,3 +1,11 @@
+# Copyright (c) 2025 Eclipse Foundation.
+# 
+# This program and the accompanying materials are made available under the
+# terms of the MIT License which is available at
+# https://opensource.org/licenses/MIT.
+#
+# SPDX-License-Identifier: MIT
+
 from vehicle_model_manager import generate_vehicle_model, revert_vehicle_model
 # from utils import restartMockProvider
 import time
