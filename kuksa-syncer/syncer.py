@@ -69,11 +69,11 @@ async def send_app_run_reply(master_id, is_done, retcode, content):
         "code": retcode
     })
 
-async def send_app_deploy_reply(master_id, content, is_finish):
+async def send_app_deploy_reply(master_id, content, is_finish, cmd="deploy-request"):
     await sio.emit("messageToKit-kitReply", {
         "token": "12a-124-45634-12345-1swer",
         "request_from": master_id,
-        "cmd": "deploy-request",
+        "cmd": cmd,
         "data": "",
         "result": content,
         "is_finish": is_finish
@@ -101,29 +101,26 @@ async def connect():
 async def messageToKit(data):
     # print("SYNCER: Command received from server",flush=True)
     # print(data,flush=True)
-    if data["cmd"] == "deploy_request":
+    if data["cmd"] in ("deploy_request", "deploy-request"):
         print("Receive deploy_request...")
-        #print("code", data["code"])
-        print("prototype", data["prototype"])
-        print("username", data["username"])
         request_from =  data["request_from"]
         # your code to run app
-        await send_app_deploy_reply(request_from, "Receive deploy request \r\n", False)
+        await send_app_deploy_reply(request_from, "Receive deploy request \r\n", False, data["cmd"])
         await asyncio.sleep(1)
         writeCodeToFile(data["code"], filename="main.py")
-        await send_app_deploy_reply(request_from, "Check syntax.... \r\n", False)
+        await send_app_deploy_reply(request_from, "Check syntax.... \r\n", False, data["cmd"])
         # your_code_to_check_velocitas_code(data["code"])
         await asyncio.sleep(3)
-        await send_app_deploy_reply(request_from, "Build docker image \r\n", False)
+        await send_app_deploy_reply(request_from, "Build docker image \r\n", False, data["cmd"])
         # your_code_to_build_docker(data["code"])
         await asyncio.sleep(3)
-        await send_app_deploy_reply(request_from, "Send to HW kit \r\n", False)
+        await send_app_deploy_reply(request_from, "Send to HW kit \r\n", False, data["cmd"])
         # your_code...()
         await asyncio.sleep(3)
-        await send_app_deploy_reply(request_from, "Run docker on HW kit \r\n", False)
+        await send_app_deploy_reply(request_from, "Run docker on HW kit \r\n", False, data["cmd"])
         # your_code...()
         await asyncio.sleep(3)
-        await send_app_deploy_reply(request_from, "Deploy done! \r\n", True)
+        await send_app_deploy_reply(request_from, "Deploy done! \r\n", True, data["cmd"])
         return 0
     
     if data["cmd"] == "subscribe_apis":

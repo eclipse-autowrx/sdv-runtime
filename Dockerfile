@@ -57,6 +57,7 @@ RUN pip3 install --no-cache-dir --target /home/dev/python-packages -r requiremen
 # Copy VSS specification from submodule and overlay files
 COPY vehicle_signal_specification ./vehicle_signal_specification
 COPY overlays ./overlays
+COPY units.yaml ./vehicle_signal_specification/spec/units.yaml
 
 # Generate extended VSS JSON with overlay files
 RUN cd vehicle_signal_specification/vss-tools/ \
