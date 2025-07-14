@@ -14,6 +14,7 @@ import json
 import signal
 import re
 # from utils import correct_parent_class_in_vehicle_model
+import yaml
 
 def extract_class_names(python_code):
     """Extracts class names from a string of Python code.
@@ -84,6 +85,11 @@ def restart_databroker():
     
 def generate_vehicle_model(input_str):
     data = json.loads(input_str)
+    unit_file = "/home/dev/python-packages/vehicle_signal_specification/spec/units.yaml"
+    with open(unit_file, 'r') as f:
+        units_data = yaml.safe_load(f)
+    valid_units = set(units_data['units'].keys())
+    traverse_and_fix(data, valid_units)
     vss_path = "/home/dev/ws/vss.json"
     with open(vss_path, 'w') as vss_file:
         json.dump(data, vss_file, indent=4)
@@ -119,7 +125,8 @@ def generate_vehicle_model(input_str):
         restart_databroker()
     
     except Exception as e:
-        print(f"..Error occured when generating vehicle model: {e}.", flush=True)  
+        print(f"..Error occured when generating vehicle model: {e}.", flush=True)
+        raise
 
 def revert_vehicle_model():
     current_dir = "/home/dev/python-packages/vehicle"
@@ -144,3 +151,18 @@ def copy_and_override(source_file, destination_file):
         print(f"Error: Source file '{source_file}' not found.")
     except Exception as e:
         print("An error occurred:", e)
+
+def traverse_and_fix(tree, valid_units, current_path=""):
+    for key, value in tree.items():
+        new_path = current_path + "." + key if current_path else key
+        if isinstance(value, dict):
+            node_type = value.get('type', None)
+            if node_type and node_type != 'branch':
+                # it's a signal
+                unit = value.get('unit') or ''
+                if unit == '' or unit not in valid_units:
+                    value['unit'] = 'm'
+                    print(f"Set default unit 'm' for signal {new_path}")
+            children = value.get('children', None)
+            if children:
+                traverse_and_fix(children, valid_units, new_path)
