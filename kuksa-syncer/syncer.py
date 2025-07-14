@@ -97,6 +97,22 @@ async def connect():
         "name": CLIENT_ID
     })
 
+def wait_for_databroker_ready(max_attempts=10, sleep_time=0.5):
+    for attempt in range(max_attempts):
+        try:
+            with KClient(BORKER_IP, BROKER_PORT) as temp_client:
+                # Test connection by fetching server info or metadata
+                temp_client.get_server_info()
+            print("Databroker is ready.")
+            return True
+        except VSSClientError as e:
+            if "Connection refused" in str(e):
+                print(f"Databroker not ready yet (attempt {attempt + 1}/{max_attempts}). Retrying...")
+                time.sleep(sleep_time)
+            else:
+                raise
+    raise Exception("Databroker failed to become ready after retries.")
+
 @sio.event
 async def messageToKit(data):
     # print("SYNCER: Command received from server",flush=True)
@@ -229,7 +245,10 @@ async def messageToKit(data):
             else:
                 print("databroker is not running")
                 raise Exception("Databroker is not running")
-
+            
+            # Wait until databroker is fully ready (port is listening)
+            wait_for_databroker_ready()
+            
             modifyMockSignal([""])
             time.sleep(0.5)
             startMockService()
