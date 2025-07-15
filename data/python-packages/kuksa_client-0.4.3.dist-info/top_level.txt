@@ -1,3 +1,0 @@
-kuksa
-kuksa_client
-tests
