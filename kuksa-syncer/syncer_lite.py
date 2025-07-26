@@ -20,8 +20,8 @@ import sys
 import json
 from typing import Dict, List, Optional
 from pexpect_util import pexpect_subpiper, PexpectProcess
-import re
 import pkg_manager
+import python_processing_utils as ppu
 
 # Configuration
 DEFAULT_KIT_SERVER = 'https://kit.digitalauto.tech'
@@ -37,103 +37,11 @@ TIME_TO_KEEP_RUNNER_ALIVE = 3 * 60  # 3 minutes
 
 def writeCodeToFile(code: str, filename: str = "main.py"):
     """Write code to a file with global variable monitoring"""
-    # Extract global variables from the code
-    global_vars = extract_global_variables(code)
-    
-    # Create monitoring code
-    monitoring_code = create_monitoring_code(global_vars)
-    
-    # Combine original code with monitoring
-    enhanced_code = monitoring_code + "\n" + code
-    
-    with open(filename, "w+") as f:
-        f.write(enhanced_code)
-    
-    return global_vars
-
-def extract_global_variables(code: str) -> List[str]:
-    """Extract global variable names from Python code"""
-    import ast
-    
-    try:
-        tree = ast.parse(code)
-        global_vars = []
-        
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Assign):
-                for target in node.targets:
-                    if isinstance(target, ast.Name):
-                        global_vars.append(target.id)
-            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-                global_vars.append(node.target.id)
-        
-        # Remove duplicates and filter out common names
-        filtered_vars = []
-        common_names = {'i', 'j', 'k', 'temp', 'tmp', 'var', 'val', 'data', 'result', 'output'}
-        for var in set(global_vars):
-            if var not in common_names and not var.startswith('_'):
-                filtered_vars.append(var)
-        
-        return filtered_vars
-    except Exception as e:
-        print(f"Error extracting variables: {e}", flush=True)
-        return []
-
-def create_monitoring_code(global_vars: List[str]) -> str:
-    """Create code to monitor global variables"""
-    if not global_vars:
-        return ""
-    
-    monitoring_code = f"""
-import json
-import time
-import threading
-import sys
-
-# Global variable monitoring
-_monitored_vars = {global_vars}
-_monitoring_active = True
-
-def _monitor_globals():
-    while _monitoring_active:
-        try:
-            globals_data = {{}}
-            for var_name in _monitored_vars:
-                if var_name in globals():
-                    value = globals()[var_name]
-                    try:
-                        # Try to serialize the value
-                        if isinstance(value, (int, float, str, bool, list, dict, tuple)):
-                            globals_data[var_name] = value
-                        else:
-                            globals_data[var_name] = str(type(value).__name__) + ': ' + str(value)[:100]
-                    except:
-                        globals_data[var_name] = str(type(value).__name__)
-                else:
-                    globals_data[var_name] = "undefined"
-            
-            # Print in a format that can be captured by pexpect
-            print(f"GLOBALS_UPDATE: {{json.dumps(globals_data)}}", flush=True)
-        except Exception as e:
-            print(f"GLOBALS_ERROR: {{str(e)}}", flush=True)
-        
-        time.sleep(1)  # Update every second
-
-# Start monitoring in a separate thread
-_monitor_thread = threading.Thread(target=_monitor_globals, daemon=True)
-_monitor_thread.start()
-
-# Function to stop monitoring
-def stop_global_monitoring():
-    global _monitoring_active
-    _monitoring_active = False
-"""
-    
-    return monitoring_code
+    return ppu.write_code_with_monitoring(code, filename)
 
 async def send_app_run_reply(master_id: str, is_done: bool, retcode: int, content: str):
     """Send reply back to the server"""
-    clean_content = remove_ansi_codes(content)
+    clean_content = ppu.remove_ansi_codes(content)
     await sio.emit("messageToKit-kitReply", {
         "kit_id": CLIENT_ID,
         "request_from": master_id,
@@ -144,60 +52,6 @@ async def send_app_run_reply(master_id: str, is_done: bool, retcode: int, conten
         "code": retcode
     })
 
-def process_done_factory(loop):
-    def process_done(master_id: str, retcode: int):
-        """Callback when process finishes"""
-        if loop.is_running():
-            asyncio.run_coroutine_threadsafe(
-                send_app_run_reply(master_id, True, retcode, ""), loop
-            )
-        else:
-            print(f"[{master_id}] FINISHED: Process completed with return code {retcode}", flush=True)
-    return process_done
-
-def my_stdout_callback_factory(loop):
-    def my_stdout_callback(master_id: str, line: str):
-        print(f"stdout: {line}", flush=True)
-        if loop.is_running():
-            asyncio.run_coroutine_threadsafe(
-                send_app_run_reply(master_id, False, 0, line + '\r\n'), loop
-            )
-        else:
-            print(f"[{master_id}] STDOUT: {line}", flush=True)
-    return my_stdout_callback
-
-def my_stderr_callback_factory(loop):
-    def my_stderr_callback(master_id: str, line: str):
-        print(f"stderr: {line}", flush=True)
-        if loop.is_running():
-            asyncio.run_coroutine_threadsafe(
-                send_app_run_reply(master_id, False, 0, line + '\r\n'), loop
-            )
-        else:
-            print(f"[{master_id}] STDERR: {line}", flush=True)
-    return my_stderr_callback
-
-def my_globals_callback_factory(loop):
-    def my_globals_callback(master_id: str, line: str):
-        """Callback for global variable updates"""
-        if line.startswith("GLOBALS_UPDATE: "):
-            try:
-                # Extract the JSON data
-                json_data = line[16:]  # Remove "GLOBALS_UPDATE: " prefix
-                globals_data = json.loads(json_data)
-                
-                # Send global variables update to client
-                if loop.is_running():
-                    asyncio.run_coroutine_threadsafe(
-                        send_globals_update(master_id, globals_data), loop
-                    )
-            except Exception as e:
-                print(f"Error parsing globals data: {str(e)}", flush=True)
-        elif line.startswith("GLOBALS_ERROR: "):
-            error_msg = line[15:]  # Remove "GLOBALS_ERROR: " prefix
-            print(f"Globals monitoring error: {error_msg}", flush=True)
-    return my_globals_callback
-
 async def send_globals_update(master_id: str, globals_data: Dict):
     """Send global variables update to the client"""
     await sio.emit("messageToKit-kitReply", {
@@ -207,10 +61,6 @@ async def send_globals_update(master_id: str, globals_data: Dict):
         "data": globals_data,
         "result": "Global variables updated"
     })
-
-def remove_ansi_codes(text):
-    ansi_escape = re.compile(r'\x1B\[[0-?]*[ -/]*[@-~]')
-    return ansi_escape.sub('', text)
 
 @sio.event
 async def connect():
@@ -274,10 +124,10 @@ async def handle_run_python_app(data):
         proc = pexpect_subpiper(
             master_id=request_from,
             cmd='python3 -u main.py',
-            stdout_callback=my_stdout_callback_factory(loop),
-            stderr_callback=my_stderr_callback_factory(loop),
-            globals_callback=my_globals_callback_factory(loop),
-            finished_callback=process_done_factory(loop),
+            stdout_callback=ppu.create_stdout_callback_factory(loop, send_app_run_reply),
+            stderr_callback=ppu.create_stderr_callback_factory(loop, send_app_run_reply),
+            globals_callback=ppu.create_globals_callback_factory(loop, send_globals_update),
+            finished_callback=ppu.create_finished_callback_factory(loop, send_app_run_reply),
             event_loop=loop
         )
         
