@@ -72,12 +72,10 @@ def my_stdout_callback(master_id: str, line: str):
         loop = asyncio.get_event_loop()
         if loop.is_running():
             asyncio.run_coroutine_threadsafe(
-                print(f"send_app_run_reply: {line}", flush=True),
                 send_app_run_reply(master_id, False, 0, line + '\r\n'), loop
             )
         else:
             # Fallback: just print the output
-            print(f"# Fallback: just print the output")
             print(f"[{master_id}] STDOUT: {line}", flush=True)
     except RuntimeError as e:
         print(f"Error: {e}", flush=True)
@@ -90,12 +88,10 @@ def my_stderr_callback(master_id: str, line: str):
         loop = asyncio.get_event_loop()
         if loop.is_running():
             asyncio.run_coroutine_threadsafe(
-                print(f"send_app_run_reply: {line}", flush=True),
                 send_app_run_reply(master_id, False, 0, line + '\r\n'), loop
             )
         else:
             # Fallback: just print the output
-            print(f"# Fallback: just print the output")
             print(f"[{master_id}] STDERR: {line}", flush=True)
     except RuntimeError as e:
         print(f"Error: {e}", flush=True)
