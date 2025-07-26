@@ -58,6 +58,7 @@ class PexpectProcess:
         master_id: str = "0",
         stdout_callback: Optional[Callable[[str, str], None]] = None,
         stderr_callback: Optional[Callable[[str, str], None]] = None,
+        globals_callback: Optional[Callable[[str, str], None]] = None,
         finished_callback: Optional[Callable[[str, int], None]] = None,
         add_path_list: List[str] = None,
         hide_console: bool = True,
@@ -93,6 +94,7 @@ class PexpectProcess:
         self.master_id = master_id
         self.stdout_callback = stdout_callback
         self.stderr_callback = stderr_callback
+        self.globals_callback = globals_callback
         self.finished_callback = finished_callback
         self.add_path_list = add_path_list or []
         self.hide_console = hide_console
@@ -174,11 +176,17 @@ class PexpectProcess:
                         line = self._child.before.strip()
                         if line:
                             self.process_info.stdout_buffer.append(line)
-                            if self.stdout_callback:
-                                # Call the callback directly since it's not async
-                                self.stdout_callback(self.master_id, line)
-                            if not self.silent:
-                                print(f"[{self.master_id}] STDOUT: {line}", file=sys.stdout)
+                            
+                            # Check if this is a globals update
+                            if line.startswith("GLOBALS_UPDATE: ") or line.startswith("GLOBALS_ERROR: "):
+                                if self.globals_callback:
+                                    self.globals_callback(self.master_id, line)
+                            else:
+                                # Regular stdout
+                                if self.stdout_callback:
+                                    self.stdout_callback(self.master_id, line)
+                                if not self.silent:
+                                    print(f"[{self.master_id}] STDOUT: {line}", file=sys.stdout)
                     
                     elif index == 1:  # EOF - process finished
                         # Get any remaining output
@@ -294,6 +302,7 @@ def pexpect_subpiper(
     master_id: str,
     stdout_callback: Optional[Callable[[str, str], None]] = None,
     stderr_callback: Optional[Callable[[str, str], None]] = None,
+    globals_callback: Optional[Callable[[str, str], None]] = None,
     add_path_list: List[str] = None,
     finished_callback: Optional[Callable[[str, int], None]] = None,
     hide_console: bool = True,
@@ -323,6 +332,7 @@ def pexpect_subpiper(
         master_id=master_id,
         stdout_callback=stdout_callback,
         stderr_callback=stderr_callback,
+        globals_callback=globals_callback,
         finished_callback=finished_callback,
         add_path_list=add_path_list,
         hide_console=hide_console,
