@@ -20,6 +20,8 @@ import sys
 import json
 from typing import Dict, List, Optional
 from pexpect_util import pexpect_subpiper, PexpectProcess
+import re
+import pkg_manager
 
 # Configuration
 DEFAULT_KIT_SERVER = 'https://kit.digitalauto.tech'
@@ -40,13 +42,14 @@ def writeCodeToFile(code: str, filename: str = "main.py"):
 
 async def send_app_run_reply(master_id: str, is_done: bool, retcode: int, content: str):
     """Send reply back to the server"""
+    clean_content = remove_ansi_codes(content)
     await sio.emit("messageToKit-kitReply", {
         "kit_id": CLIENT_ID,
         "request_from": master_id,
         "cmd": "run_python_app",
         "data": "",
         "isDone": is_done,
-        "result": content,
+        "result": clean_content,
         "code": retcode
     })
 
@@ -83,6 +86,10 @@ def my_stderr_callback_factory(loop):
             print(f"[{master_id}] STDERR: {line}", flush=True)
     return my_stderr_callback
 
+def remove_ansi_codes(text):
+    ansi_escape = re.compile(r'\x1B\[[0-?]*[ -/]*[@-~]')
+    return ansi_escape.sub('', text)
+
 @sio.event
 async def connect():
     """Handle connection to server"""
@@ -103,6 +110,10 @@ async def messageToKit(data):
         await handle_stop_python_app(data)
     elif data["cmd"] == "get-runtime-info":
         await handle_get_runtime_info(data)
+    elif data["cmd"] == "list_python_packages":
+        await handle_list_python_packages(data)
+    elif data["cmd"] == "install_python_packages":
+        await handle_install_python_packages(data)
     else:
         print(f"Unknown command: {data.get('cmd', 'unknown')}", flush=True)
 
@@ -212,6 +223,70 @@ async def handle_get_runtime_info(data):
             "total_runners": len(lsOfRunner)
         }
     })
+
+async def handle_list_python_packages(data):
+    """Handle list_python_packages command"""
+    request_from = data["request_from"]
+    
+    try:
+        pkgs = pkg_manager.listPkg()
+        await sio.emit("messageToKit-kitReply", {
+            "kit_id": CLIENT_ID,
+            "request_from": request_from,
+            "cmd": "list_python_packages",
+            "data": pkgs,
+            "result": "Successful"
+        })
+    except Exception as e:
+        await sio.emit("messageToKit-kitReply", {
+            "kit_id": CLIENT_ID,
+            "request_from": request_from,
+            "cmd": "list_python_packages",
+            "result": f"Error: {str(e)}"
+        })
+
+async def handle_install_python_packages(data):
+    """Handle install_python_packages command"""
+    request_from = data["request_from"]
+    
+    if "data" not in data:
+        await sio.emit("messageToKit-kitReply", {
+            "kit_id": CLIENT_ID,
+            "request_from": request_from,
+            "cmd": "install_python_packages",
+            "result": "Error: Missing package data",
+            "data": ""
+        })
+        return
+    
+    msg = data["data"]
+    
+    # Send initial response
+    await sio.emit("messageToKit-kitReply", {
+        "kit_id": CLIENT_ID,
+        "request_from": request_from,
+        "cmd": "install_python_packages",
+        "result": "Installing",
+        "data": f"Installing packages: {msg}\n"
+    })
+    
+    try:
+        response = await pkg_manager.installPkg(data["data"])
+        await sio.emit("messageToKit-kitReply", {
+            "kit_id": CLIENT_ID,
+            "request_from": request_from,
+            "cmd": "install_python_packages",
+            "result": "Successful",
+            "data": str(response)
+        })
+    except Exception as e:
+        await sio.emit("messageToKit-kitReply", {
+            "kit_id": CLIENT_ID,
+            "request_from": request_from,
+            "cmd": "install_python_packages",
+            "result": f"Error: {str(e)}",
+            "data": ""
+        })
 
 async def cleanup_old_runners():
     """Clean up old runners that have been running too long"""
