@@ -67,7 +67,8 @@ async def test_syncer_lite():
         master_id="test1",
         stdout_callback=test_stdout_callback,
         stderr_callback=test_stderr_callback,
-        finished_callback=test_finished_callback
+        finished_callback=test_finished_callback,
+        event_loop=asyncio.get_event_loop()
     )
     
     # Wait for process to complete
@@ -92,7 +93,8 @@ undefined_variable  # This will cause a NameError
         master_id="test2",
         stdout_callback=test_stdout_callback,
         stderr_callback=test_stderr_callback,
-        finished_callback=test_finished_callback
+        finished_callback=test_finished_callback,
+        event_loop=asyncio.get_event_loop()
     )
     
     return_code2 = process2.wait()
@@ -121,7 +123,8 @@ print("Long running process completed")
         master_id="test3",
         stdout_callback=test_stdout_callback,
         stderr_callback=test_stderr_callback,
-        finished_callback=test_finished_callback
+        finished_callback=test_finished_callback,
+        event_loop=asyncio.get_event_loop()
     )
     
     # Let it run for 3 seconds then kill it
@@ -141,7 +144,8 @@ print("Long running process completed")
         master_id="test4",
         stdout_callback=test_stdout_callback,
         stderr_callback=test_stderr_callback,
-        finished_callback=test_finished_callback
+        finished_callback=test_finished_callback,
+        event_loop=asyncio.get_event_loop()
     )
     
     # Get process info while running

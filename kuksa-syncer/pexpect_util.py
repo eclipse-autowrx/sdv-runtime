@@ -67,7 +67,8 @@ class PexpectProcess:
         searchwindowsize: int = None,
         logfile: Any = None,
         cwd: Optional[str] = None,
-        env: Optional[Dict[str, str]] = None
+        env: Optional[Dict[str, str]] = None,
+        event_loop: Optional[asyncio.AbstractEventLoop] = None
     ):
         """
         Initialize PexpectProcess
@@ -98,6 +99,7 @@ class PexpectProcess:
         self.silent = silent
         self.timeout = timeout
         self.maxread = maxread
+        self.event_loop = event_loop
         self.searchwindowsize = searchwindowsize
         self.logfile = logfile
         self.cwd = cwd
@@ -174,17 +176,12 @@ class PexpectProcess:
                             self.process_info.stdout_buffer.append(line)
                             if self.stdout_callback:
                                 # Use asyncio.run_coroutine_threadsafe for thread safety
-                                try:
-                                    loop = asyncio.get_event_loop()
-                                    if loop.is_running():
-                                        asyncio.run_coroutine_threadsafe(
-                                            self.stdout_callback(self.master_id, line), loop
-                                        )
-                                    else:
-                                        # Fallback: just call the callback directly
-                                        self.stdout_callback(self.master_id, line)
-                                except RuntimeError:
-                                    # No event loop, call directly
+                                if self.event_loop and self.event_loop.is_running():
+                                    asyncio.run_coroutine_threadsafe(
+                                        self.stdout_callback(self.master_id, line), self.event_loop
+                                    )
+                                else:
+                                    # Fallback: just call the callback directly
                                     self.stdout_callback(self.master_id, line)
                             if not self.silent:
                                 print(f"[{self.master_id}] STDOUT: {line}", file=sys.stdout)
@@ -195,15 +192,11 @@ class PexpectProcess:
                         if remaining:
                             self.process_info.stdout_buffer.append(remaining)
                             if self.stdout_callback:
-                                try:
-                                    loop = asyncio.get_event_loop()
-                                    if loop.is_running():
-                                        asyncio.run_coroutine_threadsafe(
-                                            self.stdout_callback(self.master_id, remaining), loop
-                                        )
-                                    else:
-                                        self.stdout_callback(self.master_id, remaining)
-                                except RuntimeError:
+                                if self.event_loop and self.event_loop.is_running():
+                                    asyncio.run_coroutine_threadsafe(
+                                        self.stdout_callback(self.master_id, remaining), self.event_loop
+                                    )
+                                else:
                                     self.stdout_callback(self.master_id, remaining)
                             if not self.silent:
                                 print(f"[{self.master_id}] STDOUT: {remaining}", file=sys.stdout)
@@ -218,15 +211,11 @@ class PexpectProcess:
                     error_msg = f"Error reading process output: {str(e)}"
                     self.process_info.stderr_buffer.append(error_msg)
                     if self.stderr_callback:
-                        try:
-                            loop = asyncio.get_event_loop()
-                            if loop.is_running():
-                                asyncio.run_coroutine_threadsafe(
-                                    self.stderr_callback(self.master_id, error_msg), loop
-                                )
-                            else:
-                                self.stderr_callback(self.master_id, error_msg)
-                        except RuntimeError:
+                        if self.event_loop and self.event_loop.is_running():
+                            asyncio.run_coroutine_threadsafe(
+                                self.stderr_callback(self.master_id, error_msg), self.event_loop
+                            )
+                        else:
                             self.stderr_callback(self.master_id, error_msg)
                     if not self.silent:
                         print(f"[{self.master_id}] STDERR: {error_msg}", file=sys.stderr)
@@ -246,15 +235,11 @@ class PexpectProcess:
             
             # Call finished callback
             if self.finished_callback:
-                try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        asyncio.run_coroutine_threadsafe(
-                            self.finished_callback(self.master_id, self.process_info.return_code), loop
-                        )
-                    else:
-                        self.finished_callback(self.master_id, self.process_info.return_code)
-                except RuntimeError:
+                if self.event_loop and self.event_loop.is_running():
+                    asyncio.run_coroutine_threadsafe(
+                        self.finished_callback(self.master_id, self.process_info.return_code), self.event_loop
+                    )
+                else:
                     self.finished_callback(self.master_id, self.process_info.return_code)
                 
         except Exception as e:
@@ -265,15 +250,11 @@ class PexpectProcess:
             self._running = False
             
             if self.stderr_callback:
-                try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        asyncio.run_coroutine_threadsafe(
-                            self.stderr_callback(self.master_id, error_msg), loop
-                        )
-                    else:
-                        self.stderr_callback(self.master_id, error_msg)
-                except RuntimeError:
+                if self.event_loop and self.event_loop.is_running():
+                    asyncio.run_coroutine_threadsafe(
+                        self.stderr_callback(self.master_id, error_msg), self.event_loop
+                    )
+                else:
                     self.stderr_callback(self.master_id, error_msg)
             if not self.silent:
                 print(f"[{self.master_id}] STDERR: {error_msg}", file=sys.stderr)
@@ -343,6 +324,7 @@ def pexpect_subpiper(
     finished_callback: Optional[Callable[[str, int], None]] = None,
     hide_console: bool = True,
     silent: bool = False,
+    event_loop: Optional[asyncio.AbstractEventLoop] = None,
     **kwargs
 ) -> PexpectProcess:
     """
@@ -371,6 +353,7 @@ def pexpect_subpiper(
         add_path_list=add_path_list,
         hide_console=hide_console,
         silent=silent,
+        event_loop=event_loop,
         **kwargs
     )
     

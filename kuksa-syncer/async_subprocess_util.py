@@ -264,6 +264,7 @@ async def async_subprocess_subpiper(
     finished_callback: Optional[Callable[[str, int], None]] = None,
     hide_console: bool = True,
     silent: bool = False,
+    event_loop: Optional[asyncio.AbstractEventLoop] = None,
     **kwargs
 ) -> AsyncSubprocessProcess:
     """
@@ -292,6 +293,7 @@ async def async_subprocess_subpiper(
         add_path_list=add_path_list,
         hide_console=hide_console,
         silent=silent,
+        event_loop=event_loop,
         **kwargs
     )
     

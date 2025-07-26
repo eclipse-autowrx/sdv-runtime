@@ -164,7 +164,8 @@ async def handle_run_python_app(data):
                 cmd='python3 -u main.py',
                 stdout_callback=my_stdout_callback,
                 stderr_callback=my_stderr_callback,
-                finished_callback=process_done
+                finished_callback=process_done,
+                event_loop=asyncio.get_event_loop()
             )
         else:
             # Use async subprocess (asynchronous)
@@ -173,7 +174,8 @@ async def handle_run_python_app(data):
                 cmd='python3 -u main.py',
                 stdout_callback=my_stdout_callback,
                 stderr_callback=my_stderr_callback,
-                finished_callback=process_done
+                finished_callback=process_done,
+                event_loop=asyncio.get_event_loop()
             )
         
         # Store runner info
