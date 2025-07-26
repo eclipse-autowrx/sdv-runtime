@@ -25,8 +25,11 @@ async def installPkg(pkg_str):
             stderr=asyncio.subprocess.PIPE
         )
         stdout, stderr = await proc.communicate()
-        response.append(stdout.decode().strip())
-        response.append(stderr.decode().strip())
+        # Replace \n with \r\n for proper line breaks in client rendering
+        stdout_text = stdout.decode().strip().replace('\n', '\r\n')
+        stderr_text = stderr.decode().strip().replace('\n', '\r\n')
+        response.append(stdout_text)
+        response.append(stderr_text)
 
     except subprocess.CalledProcessError as e:
         print("An error occured while installing Python packages.",flush=True)
@@ -46,9 +49,10 @@ def listPkg():
         result = subprocess.run(command, shell=True, capture_output=True, text=True)
         
         if result.returncode == 0:
-            return result.stdout
+            # Replace \n with \r\n for proper line breaks in client rendering
+            return result.stdout.replace('\n', '\r\n')
         else:
-            return f"Error listing packages: {result.stderr}"
+            return f"Error listing packages: {result.stderr.replace('\n', '\r\n')}"
             
     except Exception as e:
         return f"Error: {str(e)}"
