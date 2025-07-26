@@ -50,52 +50,38 @@ async def send_app_run_reply(master_id: str, is_done: bool, retcode: int, conten
         "code": retcode
     })
 
-def process_done(master_id: str, retcode: int):
-    """Callback when process finishes"""
-    try:
-        loop = asyncio.get_event_loop()
+def process_done_factory(loop):
+    def process_done(master_id: str, retcode: int):
+        """Callback when process finishes"""
         if loop.is_running():
             asyncio.run_coroutine_threadsafe(
                 send_app_run_reply(master_id, True, retcode, ""), loop
             )
         else:
-            # Fallback: just print the output
             print(f"[{master_id}] FINISHED: Process completed with return code {retcode}", flush=True)
-    except RuntimeError:
-        # No event loop, just print
-        print(f"[{master_id}] FINISHED: Process completed with return code {retcode}", flush=True)
+    return process_done
 
-def my_stdout_callback(master_id: str, line: str):
-    """Callback for stdout lines"""
-    print(f"stdout: {line}", flush=True)
-    try:
-        loop = asyncio.get_event_loop()
+def my_stdout_callback_factory(loop):
+    def my_stdout_callback(master_id: str, line: str):
+        print(f"stdout: {line}", flush=True)
         if loop.is_running():
             asyncio.run_coroutine_threadsafe(
                 send_app_run_reply(master_id, False, 0, line + '\r\n'), loop
             )
         else:
-            # Fallback: just print the output
             print(f"[{master_id}] STDOUT: {line}", flush=True)
-    except RuntimeError as e:
-        print(f"Error: {e}", flush=True)
-        print(f"[{master_id}] STDOUT: {line}", flush=True)
+    return my_stdout_callback
 
-def my_stderr_callback(master_id: str, line: str):
-    """Callback for stderr lines"""
-    print(f"stderr: {line}", flush=True)
-    try:
-        loop = asyncio.get_event_loop()
+def my_stderr_callback_factory(loop):
+    def my_stderr_callback(master_id: str, line: str):
+        print(f"stderr: {line}", flush=True)
         if loop.is_running():
             asyncio.run_coroutine_threadsafe(
                 send_app_run_reply(master_id, False, 0, line + '\r\n'), loop
             )
         else:
-            # Fallback: just print the output
             print(f"[{master_id}] STDERR: {line}", flush=True)
-    except RuntimeError as e:
-        print(f"Error: {e}", flush=True)
-        print(f"[{master_id}] STDERR: {line}", flush=True)
+    return my_stderr_callback
 
 @sio.event
 async def connect():
@@ -148,13 +134,14 @@ async def handle_run_python_app(data):
     # Start process using pexpect
     print(f"Starting process for {app_name} with request_from: {request_from}", flush=True)
     try:
+        loop = asyncio.get_event_loop()
         proc = pexpect_subpiper(
             master_id=request_from,
             cmd='python3 -u main.py',
-            stdout_callback=my_stdout_callback,
-            stderr_callback=my_stderr_callback,
-            finished_callback=process_done,
-            event_loop=asyncio.get_event_loop()
+            stdout_callback=my_stdout_callback_factory(loop),
+            stderr_callback=my_stderr_callback_factory(loop),
+            finished_callback=process_done_factory(loop),
+            event_loop=loop
         )
         
         # Store runner info
