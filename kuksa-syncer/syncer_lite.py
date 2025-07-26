@@ -52,15 +52,50 @@ async def send_app_run_reply(master_id: str, is_done: bool, retcode: int, conten
 
 def process_done(master_id: str, retcode: int):
     """Callback when process finishes"""
-    asyncio.create_task(send_app_run_reply(master_id, True, retcode, ""))
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.run_coroutine_threadsafe(
+                send_app_run_reply(master_id, True, retcode, ""), loop
+            )
+        else:
+            # Fallback: just print the output
+            print(f"[{master_id}] FINISHED: Process completed with return code {retcode}", flush=True)
+    except RuntimeError:
+        # No event loop, just print
+        print(f"[{master_id}] FINISHED: Process completed with return code {retcode}", flush=True)
 
 def my_stdout_callback(master_id: str, line: str):
     """Callback for stdout lines"""
-    asyncio.create_task(send_app_run_reply(master_id, False, 0, line + '\r\n'))
+    print(f"stdout: {line}", flush=True)
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.run_coroutine_threadsafe(
+                send_app_run_reply(master_id, False, 0, line + '\r\n'), loop
+            )
+        else:
+            # Fallback: just print the output
+            print(f"[{master_id}] STDOUT: {line}", flush=True)
+    except RuntimeError:
+        # No event loop, just print
+        print(f"[{master_id}] STDOUT: {line}", flush=True)
 
 def my_stderr_callback(master_id: str, line: str):
     """Callback for stderr lines"""
-    asyncio.create_task(send_app_run_reply(master_id, False, 0, line + '\r\n'))
+    print(f"stderr: {line}", flush=True)
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.run_coroutine_threadsafe(
+                send_app_run_reply(master_id, False, 0, line + '\r\n'), loop
+            )
+        else:
+            # Fallback: just print the output
+            print(f"[{master_id}] STDERR: {line}", flush=True)
+    except RuntimeError:
+        # No event loop, just print
+        print(f"[{master_id}] STDERR: {line}", flush=True)
 
 @sio.event
 async def connect():
@@ -105,10 +140,13 @@ async def handle_run_python_app(data):
     # Write code to file
     writeCodeToFile(data["data"]["code"], filename="main.py")
     
+    print(f"Running app: {app_name} for request_from: {request_from}", flush=True)
+
     # Send initial response
     await send_app_run_reply(request_from, False, 0, f"Starting {app_name}...\r\n")
     
     # Start process using pexpect
+    print(f"Starting process for {app_name} with request_from: {request_from}", flush=True)
     try:
         proc = pexpect_subpiper(
             master_id=request_from,
@@ -126,10 +164,12 @@ async def handle_run_python_app(data):
             "from": time.time()
         })
         
+        print(f"Process started with PID: {proc.get_info().pid}", flush=True)
         await send_app_run_reply(request_from, False, 0, f"Process started with PID: {proc.get_info().pid}\r\n")
         
     except Exception as e:
         error_msg = f"Failed to start process: {str(e)}"
+        print(error_msg, flush=True)
         await send_app_run_reply(request_from, True, 1, error_msg)
 
 async def handle_stop_python_app(data):
@@ -215,7 +255,7 @@ async def main():
     
     # Get configuration from environment
     server_url = os.getenv('SYNCER_SERVER_URL', DEFAULT_KIT_SERVER)
-    CLIENT_ID = "LiteRuntime-" + os.getenv('RUNTIME_NAME', DEFAULT_RUNTIME_NAME)
+    CLIENT_ID = "Runtime-" + os.getenv('RUNTIME_NAME', DEFAULT_RUNTIME_NAME)
     
     print(f"Lite Runtime starting with ID: {CLIENT_ID}", flush=True)
     print(f"Connecting to server: {server_url}", flush=True)

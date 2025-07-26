@@ -66,15 +66,48 @@ async def send_app_run_reply(master_id: str, is_done: bool, retcode: int, conten
 
 def process_done(master_id: str, retcode: int):
     """Callback when process finishes"""
-    asyncio.create_task(send_app_run_reply(master_id, True, retcode, ""))
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.run_coroutine_threadsafe(
+                send_app_run_reply(master_id, True, retcode, ""), loop
+            )
+        else:
+            # Fallback: just print the output
+            print(f"[{master_id}] FINISHED: Process completed with return code {retcode}", flush=True)
+    except RuntimeError:
+        # No event loop, just print
+        print(f"[{master_id}] FINISHED: Process completed with return code {retcode}", flush=True)
 
 def my_stdout_callback(master_id: str, line: str):
     """Callback for stdout lines"""
-    asyncio.create_task(send_app_run_reply(master_id, False, 0, line + '\r\n'))
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.run_coroutine_threadsafe(
+                send_app_run_reply(master_id, False, 0, line + '\r\n'), loop
+            )
+        else:
+            # Fallback: just print the output
+            print(f"[{master_id}] STDOUT: {line}", flush=True)
+    except RuntimeError:
+        # No event loop, just print
+        print(f"[{master_id}] STDOUT: {line}", flush=True)
 
 def my_stderr_callback(master_id: str, line: str):
     """Callback for stderr lines"""
-    asyncio.create_task(send_app_run_reply(master_id, False, 0, line + '\r\n'))
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.run_coroutine_threadsafe(
+                send_app_run_reply(master_id, False, 0, line + '\r\n'), loop
+            )
+        else:
+            # Fallback: just print the output
+            print(f"[{master_id}] STDERR: {line}", flush=True)
+    except RuntimeError:
+        # No event loop, just print
+        print(f"[{master_id}] STDERR: {line}", flush=True)
 
 @sio.event
 async def connect():
