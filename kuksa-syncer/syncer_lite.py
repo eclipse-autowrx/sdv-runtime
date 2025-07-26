@@ -112,7 +112,7 @@ async def handle_run_python_app(data):
     try:
         proc = pexpect_subpiper(
             master_id=request_from,
-            cmd='python -u main.py',
+            cmd='python3 -u main.py',
             stdout_callback=my_stdout_callback,
             stderr_callback=my_stderr_callback,
             finished_callback=process_done

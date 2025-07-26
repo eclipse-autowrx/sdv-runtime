@@ -15,15 +15,15 @@ import asyncio
 import time
 from pexpect_util import pexpect_subpiper
 
-async def test_stdout_callback(master_id: str, line: str):
+def test_stdout_callback(master_id: str, line: str):
     """Test callback for stdout"""
     print(f"[{master_id}] STDOUT: {line}")
 
-async def test_stderr_callback(master_id: str, line: str):
+def test_stderr_callback(master_id: str, line: str):
     """Test callback for stderr"""
     print(f"[{master_id}] STDERR: {line}")
 
-async def test_finished_callback(master_id: str, return_code: int):
+def test_finished_callback(master_id: str, return_code: int):
     """Test callback for process completion"""
     print(f"[{master_id}] FINISHED: Process completed with return code {return_code}")
 
@@ -63,7 +63,7 @@ async def test_syncer_lite():
     print("-" * 30)
     
     process = pexpect_subpiper(
-        cmd=f"python -u {test_file}",
+        cmd=f"python3 -u {test_file}",
         master_id="test1",
         stdout_callback=test_stdout_callback,
         stderr_callback=test_stderr_callback,
@@ -88,7 +88,7 @@ undefined_variable  # This will cause a NameError
         f.write(error_code)
     
     process2 = pexpect_subpiper(
-        cmd="python -u error_app.py",
+        cmd="python3 -u error_app.py",
         master_id="test2",
         stdout_callback=test_stdout_callback,
         stderr_callback=test_stderr_callback,
@@ -117,7 +117,7 @@ print("Long running process completed")
         f.write(long_running_code)
     
     process3 = pexpect_subpiper(
-        cmd="python -u long_app.py",
+        cmd="python3 -u long_app.py",
         master_id="test3",
         stdout_callback=test_stdout_callback,
         stderr_callback=test_stderr_callback,
@@ -137,7 +137,7 @@ print("Long running process completed")
     print("-" * 30)
     
     process4 = pexpect_subpiper(
-        cmd="python -c 'print(\"Quick test\"); exit(42)'",
+        cmd="python3 -c 'print(\"Quick test\"); exit(42)'",
         master_id="test4",
         stdout_callback=test_stdout_callback,
         stderr_callback=test_stderr_callback,

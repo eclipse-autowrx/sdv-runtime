@@ -355,7 +355,7 @@ if __name__ == "__main__":
         print("Testing async_subprocess_subpiper...")
         
         process = await async_subprocess_subpiper(
-            cmd="python -c 'import time; print(\"Hello from Python\"); time.sleep(1); print(\"Goodbye\"); exit(0)'",
+            cmd="python3 -c 'import time; print(\"Hello from Python\"); time.sleep(1); print(\"Goodbye\"); exit(0)'",
             master_id="test1",
             stdout_callback=test_stdout_callback,
             stderr_callback=test_stderr_callback,
