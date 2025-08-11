@@ -14,6 +14,11 @@ import os
 import signal
 import sys
 import threading
+from lib.json_array_patch import apply_global_patch
+
+# Apply global JSON patch for array serialization early
+apply_global_patch()
+
 from mockservice import MockService
 
 SERVICE_NAME = "mock_provider"
