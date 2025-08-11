@@ -20,6 +20,10 @@ from typing import Any, Dict, Iterator, List
 import grpc
 from kuksa_client.grpc import Datapoint
 from lib.baseservice import BaseService, is_grpc_fatal_error
+from lib.json_array_patch import apply_global_patch
+
+# Apply global JSON patch for array serialization
+apply_global_patch()
 from lib.behaviorexecutor import BehaviorExecutor
 from lib.mockeddatapoint import MockedDataPoint
 from lib.datapoint import DataPoint
@@ -177,7 +181,32 @@ class MockService(BaseService):
         """Set the value of a datapoint within databroker."""
         try:
             log.info("Feeding '%s' with value %s", path, value)
-            self._client.set_current_values({path: Datapoint(value)})
+            
+            # Convert array values to string format expected by kuksa_client
+            if isinstance(value, list):
+                # Ensure list contains proper numeric values, not strings
+                converted_list = []
+                for item in value:
+                    if isinstance(item, str) and item.isdigit():
+                        converted_list.append(int(item))
+                    elif isinstance(item, str) and item.lower() in ['true', 'false']:
+                        # Handle boolean strings properly
+                        converted_list.append(item.lower() == 'true')
+                    elif isinstance(item, str):
+                        try:
+                            converted_list.append(float(item))
+                        except ValueError:
+                            converted_list.append(item)  # Keep as string
+                    else:
+                        converted_list.append(item)
+                
+                # Convert Python list to JSON string format: [1,125] 
+                import json
+                formatted_value = json.dumps(converted_list, separators=(',', ':'))
+            else:
+                formatted_value = value
+                
+            self._client.set_current_values({path: Datapoint(formatted_value)})
             # remove events set through set_datapoint
             event_to_remove = None
             for event in self._pending_event_list:

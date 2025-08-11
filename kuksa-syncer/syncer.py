@@ -21,9 +21,13 @@ import time
 import os
 import sys
 import json
+from json_array_patch import apply_global_patch
+
+# Apply global JSON patch for array serialization
+apply_global_patch()
+
 from vehicle_model_manager import generate_vehicle_model, revert_vehicle_model
 import pkg_manager
-import json
 
 BORKER_IP = '127.0.0.1'
 BROKER_PORT = 55555
@@ -616,7 +620,14 @@ async def ticker_fast():
                     result = {}
                     for api in current_values_dict:
                         if current_values_dict[api] is not None:
-                            result[api] = current_values_dict[api].value
+                            value = current_values_dict[api].value
+                            # Convert array types to list for JSON serialization
+                            if hasattr(value, 'values') and hasattr(value.values, '__iter__'):
+                                result[api] = list(value.values)
+                            elif hasattr(value, 'tolist'):
+                                result[api] = value.tolist()
+                            else:
+                                result[api] = value
                         else:
                             result[api] = None
                     # elapsed_time = time.time() - start_time
@@ -690,13 +701,20 @@ async def ticker_5s():
                 })
 
                 for client_sid in lsOfApiSubscriber:
+                    # Convert lsOfApiSubscriber to JSON-safe format
+                    safe_api_subscriber = {}
+                    for key, val in lsOfApiSubscriber.items():
+                        safe_api_subscriber[key] = {
+                            "apis": val.get("apis", []),
+                            "keep_alive": val.get("keep_alive", 0)
+                        }
                     await sio.emit("messageToKit-kitReply", {
                             "kit_id": CLIENT_ID,
                             "request_from": client_sid,
                             "cmd":"report-runtime-state",
                             "data": {
                                 "lsOfRunner": convertLsOfRunnerToJson(lsOfRunner),
-                                "lsOfApiSubscriber": lsOfApiSubscriber
+                                "lsOfApiSubscriber": safe_api_subscriber
                             }
                         })
         except Exception as e:
