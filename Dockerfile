@@ -79,7 +79,8 @@ RUN cd vehicle-model-generator/ \
 
 # Copy VSS and vehicle_signal_specification to the target
 RUN cp -r vehicle_signal_specification /home/dev/python-packages/ \
-    && cp vehicle_signal_specification/vss-tools/vss.json /home/dev/python-packages/
+    && cp vehicle_signal_specification/vss-tools/vss.json /home/dev/python-packages/ \
+    && cp -r /home/dev/python-packages/vehicle /home/dev/python-packages/std_vehicle || true
 
 # Now adding generic parts
 FROM target-$TARGETARCH AS target

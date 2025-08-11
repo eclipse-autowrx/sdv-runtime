@@ -42,7 +42,8 @@ class MockLoader(ABC):
 
 class PythonDslLoader(MockLoader):
     def _has_supported_type(self, data_type: DataType) -> bool:
-        return (
+        # Basic scalar types
+        scalar_types = (
             data_type == DataType.BOOLEAN
             or data_type == DataType.FLOAT
             or data_type == DataType.DOUBLE
@@ -55,7 +56,27 @@ class PythonDslLoader(MockLoader):
             or data_type == DataType.INT64
             or data_type == DataType.UINT64
             or data_type == DataType.STRING
+            or data_type == DataType.TIMESTAMP
         )
+        
+        # Array types
+        array_types = (
+            data_type == DataType.BOOLEAN_ARRAY
+            or data_type == DataType.FLOAT_ARRAY
+            or data_type == DataType.DOUBLE_ARRAY
+            or data_type == DataType.INT8_ARRAY
+            or data_type == DataType.UINT8_ARRAY
+            or data_type == DataType.INT16_ARRAY
+            or data_type == DataType.UINT16_ARRAY
+            or data_type == DataType.INT32_ARRAY
+            or data_type == DataType.UINT32_ARRAY
+            or data_type == DataType.INT64_ARRAY
+            or data_type == DataType.UINT64_ARRAY
+            or data_type == DataType.STRING_ARRAY
+            or data_type == DataType.TIMESTAMP_ARRAY
+        )
+        
+        return scalar_types or array_types
 
     def _load_mocked_datapoints(self, client) -> Dict[str, MockedDataPoint]:
         mocked_datapoints: Dict[str, MockedDataPoint] = dict()
