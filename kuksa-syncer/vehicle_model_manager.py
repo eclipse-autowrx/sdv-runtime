@@ -15,6 +15,10 @@ import signal
 import re
 # from utils import correct_parent_class_in_vehicle_model
 import yaml
+from json_array_patch import apply_global_patch
+
+# Apply global JSON patch for array serialization
+apply_global_patch()
 
 def extract_class_names(python_code):
     """Extracts class names from a string of Python code.
