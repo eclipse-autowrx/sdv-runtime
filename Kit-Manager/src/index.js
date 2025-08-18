@@ -13,7 +13,8 @@ const http = require('http');
 const { Server } = require('socket.io');
 const config = require('../configs');
 const convertPgCode = require('./convert_code');
-const cors = require('cors')
+const cors = require('cors');
+const { spawn } = require('child_process');
 
 const app = express();
 app.use(express.json());
@@ -29,6 +30,34 @@ const io = new Server(server, {
 let KITS = new Map()
 let CLIENTS = new Map()
 let SYNCER_HW = new Map()
+
+// C++ Compilation environment detection
+const base_cpp_path = '/home/dev'
+console.log(`Compilation base path: ${base_cpp_path}`)
+
+// Helper functions for C++ compilation
+async function createMinimalSdkTemplate(dest) {
+    await fs.promises.mkdir(dest, { recursive: true });
+    await fs.promises.mkdir(path.join(dest, 'app'), { recursive: true });
+    await fs.promises.mkdir(path.join(dest, 'build'), { recursive: true });
+    
+    const rootCMake = `cmake_minimum_required(VERSION 3.16)
+project(TestApp CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+find_package(Threads REQUIRED)
+
+add_subdirectory(app)
+`;
+    
+    const appCMake = `cmake_minimum_required(VERSION 3.16)
+
+add_subdirectory(src)
+`;
+
+    await fs.promises.writeFile(path.join(dest, 'CMakeLists.txt'), rootCMake);
+    await fs.promises.writeFile(path.join(dest, 'app', 'CMakeLists.txt'), appCMake);
+}
 
 // setInterval(() => {
 //     console.log(`KITS: ${KITS.size}`)
@@ -134,7 +163,7 @@ io.on('connection', (socket) => {
     })
 
     socket.on('report-runtime-state', (payload) => {
-        let kit_id = payload?.kit_id || null
+        let kit_id = payload && payload.kit_id ? payload.kit_id : null
         if(kit_id && payload.data) {
                         let kit = KITS.get(kit_id)
                         if(!kit) return
@@ -223,7 +252,7 @@ io.on('connection', (socket) => {
                 if(payload.disable_code_convert) {
                         convertedCode = payload.code
                 } else {
-                        convertedCode = await convertPgCode(payload.prototype?.name || 'App', payload.code || '')
+                        convertedCode = await convertPgCode((payload.prototype && payload.prototype.name) || 'App', payload.code || '')
                 }
                 // console.log(`convertedCode`)
                 // console.log(convertedCode)
@@ -272,8 +301,267 @@ io.on('connection', (socket) => {
         io.to(payload.request_from).emit('messageToKit-kitReply', payload)
     })
 
+    // ============ C++ COMPILATION SERVICE ============
+    socket.on('compile_cpp', async (data) => {
+        if(!data["files"] || !data["app_name"]) {
+            socket.emit('compile_cpp_reply', {
+                "status": "err: invalid",
+                "result": "Invalid request, missing files or app_name\r\n",
+                "cmd": "compile_cpp",
+                "data": "",
+                "isDone": true,
+                "code": 1
+            })
+            return
+        }
+
+        socket.emit("compile_cpp_reply", {
+            "status": "compile-start",
+            "result": "Start to compile C++ app...\r\n",
+            "cmd": "compile_cpp",
+            "data": "",
+            "isDone": false,
+            "code": 0
+        })
+
+        let app_name = "app_" + socket.id
+        let app_dir = `/home/dev/data/ws/${app_name}`
+
+        try {
+            await createMinimalSdkTemplate(app_dir)
+        } catch(err){
+            await socket.emit("compile_cpp_reply", {
+                "status": "err-copy-folder",
+                "result": err.toString(),
+                "cmd": "compile_cpp",
+                "data": "",
+                "isDone": true,
+                "code": 1
+            })
+            return
+        }
+
+        // Write C++ files
+        try {
+            try {
+                if (fs.promises.rm) {
+                    await fs.promises.rm(`${app_dir}/app/src`, { recursive: true, force: true });
+                } else {
+                    const rm = spawn('rm', ['-rf', `${app_dir}/app/src`]);
+                    await new Promise((resolve, reject) => {
+                        rm.on('close', (code) => code === 0 ? resolve() : reject(new Error(`rm failed with code ${code}`)));
+                        rm.on('error', reject);
+                    });
+                }
+            } catch (error) {
+                console.log("Warning: Could not clear existing source files:", error.message);
+            }
+            await fs.promises.mkdir(`${app_dir}/app/src`, { recursive: true });
+
+            for (const [filename, content] of Object.entries(data.files)) {
+                const filePath = path.join(`${app_dir}/app/src`, filename);
+                const fileDir = path.dirname(filePath);
+                await fs.promises.mkdir(fileDir, { recursive: true });
+                await fs.promises.writeFile(filePath, content, 'utf8');
+                
+                socket.emit("compile_cpp_reply", {
+                    "status": "file-written",
+                    "result": `Written file: ${filename}\r\n`,
+                    "cmd": "compile_cpp",
+                    "data": "",
+                    "isDone": false,
+                    "code": 0
+                })
+            }
+
+            const cmakeContent = `set(TARGET_NAME "app")
+
+file(GLOB_RECURSE CPP_SOURCES "*.cpp")
+
+add_executable(\${TARGET_NAME}
+    \${CPP_SOURCES}
+)
+
+target_include_directories(\${TARGET_NAME} PRIVATE
+    \${CMAKE_CURRENT_SOURCE_DIR}
+    \${CMAKE_CURRENT_SOURCE_DIR}/include
+    \${CMAKE_CURRENT_SOURCE_DIR}/../include
+)
+
+file(GLOB_RECURSE HEADER_FILES "*.h" "*.hpp")
+foreach(HEADER_FILE \${HEADER_FILES})
+    get_filename_component(HEADER_DIR \${HEADER_FILE} DIRECTORY)
+    target_include_directories(\${TARGET_NAME} PRIVATE \${HEADER_DIR})
+endforeach()
+
+target_link_libraries(\${TARGET_NAME}
+    Threads::Threads
+)`;
+            
+            await fs.promises.writeFile(`${app_dir}/app/src/CMakeLists.txt`, cmakeContent, 'utf8');
+
+        } catch(err) {
+            await socket.emit("compile_cpp_reply", {
+                "status": "err_write_files",
+                "result": err.toString(),
+                "cmd": "compile_cpp",
+                "data": "",
+                "isDone": true,
+                "code": 1
+            })
+            return
+        }
+
+        // Build with CMake
+        try {
+            await fs.promises.mkdir(`${app_dir}/build`, { recursive: true });
+            const pConfigure = spawn('cmake', ['..'], { cwd: `${app_dir}/build` });
+
+            pConfigure.stdout.on('data', async (data) => {
+                await socket.emit("compile_cpp_reply", {
+                    "status": "configure-stdout",
+                    "cmd": "compile_cpp",
+                    "data": "",
+                    "isDone": false,
+                    "result": `${data}`,
+                    "code": 0
+                })
+            });
+
+            pConfigure.stderr.on('data', async (data) => {
+                await socket.emit("compile_cpp_reply", {
+                    "status": "configure-stderr",
+                    "cmd": "compile_cpp",
+                    "data": "",
+                    "isDone": false,
+                    "result": `${data}`,
+                    "code": 0
+                })
+            });
+
+            pConfigure.on('close', async (code) => {
+                if (code !== 0) {
+                    await socket.emit("compile_cpp_reply", {
+                        "status": "configure-failed",
+                        "cmd": "compile_cpp",
+                        "data": "",
+                        "isDone": true,
+                        "result": `CMake configuration failed with code ${code}\r\n`,
+                        "code": code
+                    })
+                    return;
+                }
+
+                const pBuild = spawn('make', [], { cwd: `${app_dir}/build` });
+
+                pBuild.stdout.on('data', async (data) => {
+                    await socket.emit("compile_cpp_reply", {
+                        "status": "build-stdout",
+                        "cmd": "compile_cpp",
+                        "data": "",
+                        "isDone": false,
+                        "result": `${data}`,
+                        "code": 0
+                    })
+                });
+
+                pBuild.stderr.on('data', async (data) => {
+                    await socket.emit("compile_cpp_reply", {
+                        "status": "build-stderr",
+                        "cmd": "compile_cpp",
+                        "data": "",
+                        "isDone": false,
+                        "result": `${data}`,
+                        "code": 0
+                    })
+                });
+
+                pBuild.on('close', async (code) => {
+                    const willRun = data["run"] === true && code === 0;
+                    
+                    await socket.emit("compile_cpp_reply", {
+                        "status": "build-done",
+                        "cmd": "compile_cpp",
+                        "data": "",
+                        "isDone": !willRun,
+                        "result": `Build completed with code ${code}\r\n`,
+                        "code": code
+                    })
+
+                    if (code === 0) {
+                        let executablePath = `${app_dir}/build/app/src/app`;
+                        let outputPath = `/home/dev/data/output/${app_name}`;
+                        
+                        try {
+                            await fs.promises.mkdir(path.dirname(outputPath), { recursive: true });
+                            await fs.promises.copyFile(executablePath, outputPath);
+                            await fs.promises.chmod(outputPath, 0o755);
+                        } catch(err) {
+                            console.log("Error copying executable:", err);
+                        }
+
+                        if(data["run"] === true) {
+                            try {
+                                const absoluteExecPath = path.resolve(executablePath);
+                                const pRun = spawn(absoluteExecPath, [], {
+                                    cwd: path.dirname(absoluteExecPath)
+                                });
+                                
+                                pRun.stdout.on('data', async (data) => {
+                                    await socket.emit("compile_cpp_reply", {
+                                        "status": "run-stdout",
+                                        "cmd": "compile_cpp",
+                                        "data": "",
+                                        "isDone": false,
+                                        "result": `${data}`,
+                                        "code": 0
+                                    })
+                                });
+                        
+                                pRun.stderr.on('data', async (data) => {
+                                    await socket.emit("compile_cpp_reply", {
+                                        "status": "run-stderr",
+                                        "cmd": "compile_cpp",
+                                        "data": "",
+                                        "isDone": false,
+                                        "result": `${data}`,
+                                        "code": 0
+                                    })
+                                });
+
+                                pRun.on('close', async (code) => {
+                                    await socket.emit("compile_cpp_reply", {
+                                        "status": "run-done",
+                                        "cmd": "compile_cpp",
+                                        "data": "",
+                                        "isDone": true,
+                                        "result": `App exit code ${code}\r\n`,
+                                        "code": code
+                                    })
+                                })
+                            } catch(err) {
+                                console.log("Error running executable:", err);
+                            }
+                        }
+                    }
+                });
+            });
+
+        } catch(err) {
+            await socket.emit("compile_cpp_reply", {
+                "status": "err_build",
+                "result": err.toString(),
+                "cmd": "compile_cpp",
+                "data": "",
+                "isDone": true,
+                "code": 1
+            })
+        }
+    })
+
 });
 
 server.listen(config.port, () => {
-    console.log(`Listening on port ${config.port}`);
+    console.log(`SDV Runtime Kit Manager with C++ Compilation listening on port ${config.port}`);
+    console.log(`Available compilation endpoints: compile_cpp`);
 });

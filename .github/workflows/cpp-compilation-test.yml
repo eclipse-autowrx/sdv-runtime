@@ -1,0 +1,109 @@
+# DISABLED: C++ Compilation Service Tests
+# To enable: remove the comment above and uncomment the 'on:' section below
+
+name: C++ Compilation Service Tests
+
+# on:
+#   push:
+#     branches: [ main, cpp-compilation-feature ]
+#   pull_request:
+#     branches: [ main ]
+
+jobs:
+  test-cpp-compilation:
+    runs-on: ubuntu-latest
+    
+    services:
+      docker:
+        image: docker:dind
+        options: --privileged
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        
+    - name: Install dependencies
+      run: |
+        npm install
+        npm install socket.io-client
+        
+    - name: Build SDV Runtime container
+      run: |
+        docker build \
+          --tag sdv-runtime-production:latest \
+          --progress=plain .
+          
+    - name: Start SDV Runtime container
+      run: |
+        mkdir -p docker-output
+        docker run -d \
+          --name sdv-runtime-container \
+          --publish 3090:3090 \
+          --volume "$(pwd)/docker-output:/home/dev/data/output" \
+          sdv-runtime-production:latest
+          
+    - name: Wait for container to be ready
+      run: |
+        echo "Waiting for SDV Runtime to start..."
+        for i in {1..30}; do
+          if curl -f http://localhost:3090 >/dev/null 2>&1; then
+            echo "SDV Runtime is ready!"
+            break
+          fi
+          echo "Attempt $i/30: Still waiting..."
+          sleep 2
+        done
+        
+        # Verify container is running
+        docker ps | grep sdv-runtime-container
+        docker logs sdv-runtime-container
+        
+    - name: Run automated test suite
+      run: |
+        chmod +x test/ci/automated-test-suite.js
+        node test/ci/automated-test-suite.js
+      env:
+        SDV_SERVER_URL: http://localhost:3090
+        TEST_TIMEOUT: 60000
+        
+    - name: Run individual tests
+      run: |
+        echo "Running connection test..."
+        timeout 15 node test/scripts/connection-test.js
+        
+        echo "Running basic compilation test..."
+        timeout 30 node test/scripts/basic-test.js
+        
+        echo "Running multi-file test..."
+        timeout 45 node test/02-multi-file/test-multifile.js
+        
+    - name: Check generated executables
+      run: |
+        echo "Checking generated executables..."
+        ls -la docker-output/
+        if [ -n "$(ls -A docker-output/)" ]; then
+          echo "✅ Executables generated successfully"
+          file docker-output/app_* | head -3
+        else
+          echo "❌ No executables found"
+          exit 1
+        fi
+        
+    - name: Container logs (on failure)
+      if: failure()
+      run: |
+        echo "=== Container Logs ==="
+        docker logs sdv-runtime-container
+        echo "=== Container Status ==="
+        docker ps -a | grep sdv-runtime
+        
+    - name: Cleanup
+      if: always()
+      run: |
+        docker stop sdv-runtime-container || true
+        docker rm sdv-runtime-container || true

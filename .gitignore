@@ -12,3 +12,7 @@ mock_service.log
 .vssclient_history
 data/python-packages/
 data/custom-models/
+
+# C++ Compilation Output
+docker-output/
+node_modules/
