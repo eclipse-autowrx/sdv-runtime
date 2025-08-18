@@ -110,9 +110,6 @@ COPY --chown=dev:sdvr Kit-Manager /home/dev/Kit-Manager
 WORKDIR /home/dev/Kit-Manager
 RUN npm install
 
-# Create output directory with proper permissions for executable copying
-RUN mkdir -p /home/dev/data/output && chmod 777 /home/dev/data/output
-
 ENV PYTHONPATH="/home/dev/python-packages/:${PYTHONPATH}"
 
 # Re-install grpcio to ensure it's built for the target platform
