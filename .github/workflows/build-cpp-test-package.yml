@@ -13,12 +13,28 @@ on:
 jobs:
   check-and-build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
         submodules: recursive
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Verify submodules
+      run: |
+        echo "Checking submodules..."
+        git submodule status
+        if [ ! -d "vehicle_signal_specification" ] || [ ! -d "vehicle-model-generator" ]; then
+          echo "Submodules not found, initializing..."
+          git submodule update --init --recursive
+        fi
+        ls -la vehicle_signal_specification/ || echo "VSS submodule missing"
+        ls -la vehicle-model-generator/ || echo "Vehicle model generator submodule missing"
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
