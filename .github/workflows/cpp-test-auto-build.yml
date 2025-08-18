@@ -116,7 +116,7 @@ jobs:
 
     - name: Upload image artifact (PR only)
       if: github.event_name == 'pull_request'
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: cpp-test-docker-image
         path: /tmp/cpp-test-image.tar
