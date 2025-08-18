@@ -3,14 +3,15 @@
 ## Overview
 Two workflows are provided for building C++ test Docker packages:
 
-### 1. **Manual Trigger Build** (`build-cpp-test-package.yml`)
-- Builds only when commit message contains `[build-cpp]` or `[cpp-test]`
-- Useful for controlled releases
-
-### 2. **Automatic Build** (`cpp-test-auto-build.yml`)
+### 1. **Build Test Package** (`build-cpp-test-package.yml`)
 - Builds on every commit to cpp branches
-- Builds for PRs (without publishing)
-- Recommended for continuous testing
+- Creates versioned test packages with cpp-test prefix
+- Publishes to GitHub Container Registry
+
+### 2. **Auto Build with PR Support** (`cpp-test-auto-build.yml`)
+- Builds on every commit to cpp branches
+- Builds for PRs (creates artifacts without publishing)
+- Includes comprehensive testing and validation
 
 ## Docker Image Naming Convention
 
@@ -24,9 +25,10 @@ All C++ test packages are published with distinguished names:
 
 ## Usage
 
-### Trigger Manual Build
+### Trigger Build
 ```bash
-git commit -m "Add new feature [build-cpp]"
+# Any commit will trigger a build
+git commit -m "Add new feature"
 git push
 ```
 

@@ -1,4 +1,4 @@
-name: Build C++ Test Package
+name: Build C++ Test Package on Every Commit
 
 on:
   push:
@@ -13,7 +13,6 @@ on:
 jobs:
   check-and-build:
     runs-on: ubuntu-latest
-    if: contains(github.event.head_commit.message, '[build-cpp]') || contains(github.event.head_commit.message, '[cpp-test]')
     
     steps:
     - name: Checkout code
