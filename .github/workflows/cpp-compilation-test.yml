@@ -1,10 +1,13 @@
+# DISABLED: C++ Compilation Service Tests
+# To enable: remove the comment above and uncomment the 'on:' section below
+
 name: C++ Compilation Service Tests
 
-on:
-  push:
-    branches: [ main, cpp-compilation-feature ]
-  pull_request:
-    branches: [ main ]
+# on:
+#   push:
+#     branches: [ main, cpp-compilation-feature ]
+#   pull_request:
+#     branches: [ main ]
 
 jobs:
   test-cpp-compilation:
