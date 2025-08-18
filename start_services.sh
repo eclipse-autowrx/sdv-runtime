@@ -26,7 +26,8 @@ if [ -z "$DISABLE_DATABROKER" ]; then
     /app/databroker $DATABROKER_ARGS & 
 fi
 
-/home/dev/ws/kit-manager/node-km &
+# Start enhanced Kit-Manager with full functionality (Python deployment + C++ compilation)
+cd /home/dev && node Kit-Manager/src/index.js &
 
 sleep 3 # Ensure that the kuksa databroker and mosquitto start before the syncer
 

@@ -34,7 +34,7 @@ jobs:
         
     - name: Build SDV Runtime container
       run: |
-        docker build -f Dockerfile.kitmanager \
+        docker build \
           --tag sdv-runtime-production:latest \
           --progress=plain .
           

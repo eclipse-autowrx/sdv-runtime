@@ -36,9 +36,9 @@ RUN groupadd -r sdvr && useradd -r -g sdvr dev \
 FROM ubuntu:22.04 AS python-builder
 ARG TARGETARCH
 
-# Install Python and pip
+# Install Python and pip + C++ compilation tools
 RUN apt-get update && apt-get install -y \
-    python3 python3-pip git build-essential \
+    python3 python3-pip git build-essential cmake make gcc g++ \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -98,6 +98,18 @@ COPY --chown=dev:sdvr --chmod=0755 mock /home/dev/ws/mock/
 COPY mosquitto-no-auth.conf /etc/mosquitto/mosquitto-no-auth.conf
 COPY --chown=dev:sdvr --chmod=0755 start_services.sh /start_services.sh
 
+# Install Node.js and C++ compilation dependencies
+RUN apt-get update && apt-get install -y \
+    nodejs npm cmake make gcc g++ \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Copy Kit-Manager for C++ compilation
+COPY --chown=dev:sdvr Kit-Manager /home/dev/Kit-Manager
+
+# Install Kit-Manager dependencies
+WORKDIR /home/dev/Kit-Manager
+RUN npm install
+
 ENV PYTHONPATH="/home/dev/python-packages/:${PYTHONPATH}"
 
 # Re-install grpcio to ensure it's built for the target platform
@@ -122,7 +134,7 @@ ENV KIT_MANAGER_PORT=3090
 ENV KUKSA_DATABROKER_METADATA_FILE=/home/dev/ws/vss.json
 EXPOSE $KUKSA_DATABROKER_PORT $KIT_MANAGER_PORT
 
-RUN mkdir /home/dev/data
+RUN mkdir -p /home/dev/data/ws /home/dev/data/output
 RUN chown -R dev /home/dev/data
 RUN chmod -R 777 /home/dev/data
 

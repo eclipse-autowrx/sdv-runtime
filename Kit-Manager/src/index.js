@@ -32,7 +32,7 @@ let CLIENTS = new Map()
 let SYNCER_HW = new Map()
 
 // C++ Compilation environment detection
-const base_cpp_path = process.env.CONTAINER_MODE === 'true' ? '/home/dev' : "../../"
+const base_cpp_path = '/home/dev'
 console.log(`Compilation base path: ${base_cpp_path}`)
 
 // Helper functions for C++ compilation
@@ -163,7 +163,7 @@ io.on('connection', (socket) => {
     })
 
     socket.on('report-runtime-state', (payload) => {
-        let kit_id = payload?.kit_id || null
+        let kit_id = payload && payload.kit_id ? payload.kit_id : null
         if(kit_id && payload.data) {
                         let kit = KITS.get(kit_id)
                         if(!kit) return
@@ -252,7 +252,7 @@ io.on('connection', (socket) => {
                 if(payload.disable_code_convert) {
                         convertedCode = payload.code
                 } else {
-                        convertedCode = await convertPgCode(payload.prototype?.name || 'App', payload.code || '')
+                        convertedCode = await convertPgCode((payload.prototype && payload.prototype.name) || 'App', payload.code || '')
                 }
                 // console.log(`convertedCode`)
                 // console.log(convertedCode)
@@ -325,9 +325,7 @@ io.on('connection', (socket) => {
         })
 
         let app_name = "app_" + socket.id
-        let app_dir = process.env.CONTAINER_MODE === 'true' 
-            ? `/home/dev/data/ws/${app_name}`
-            : `../ws/${app_name}`
+        let app_dir = `/home/dev/data/ws/${app_name}`
 
         try {
             await createMinimalSdkTemplate(app_dir)
@@ -492,9 +490,7 @@ target_link_libraries(\${TARGET_NAME}
 
                     if (code === 0) {
                         let executablePath = `${app_dir}/build/app/src/app`;
-                        let outputPath = process.env.CONTAINER_MODE === 'true' 
-                            ? `/home/dev/data/output/${app_name}`
-                            : `../output/${app_name}`;
+                        let outputPath = `/home/dev/data/output/${app_name}`;
                         
                         try {
                             await fs.promises.mkdir(path.dirname(outputPath), { recursive: true });
