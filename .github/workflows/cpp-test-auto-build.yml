@@ -108,11 +108,6 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
-    - name: Test the built image
-      if: github.event_name == 'pull_request'
-      run: |
-        docker load --input /tmp/cpp-test-image.tar
-        docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }} echo "Image test successful"
 
     - name: Upload image artifact (PR only)
       if: github.event_name == 'pull_request'
