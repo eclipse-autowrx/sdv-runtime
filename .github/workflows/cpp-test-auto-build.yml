@@ -77,9 +77,9 @@ jobs:
         tags: |
           type=raw,value=${{ steps.version.outputs.version }}
           type=raw,value=latest,enable=${{ github.ref == 'refs/heads/cpp-compiler' }}
-          type=sha,prefix={{branch}}-
-          type=ref,event=pr,prefix=pr-
-          type=raw,value={{branch}}-latest
+          type=ref,event=pr
+          type=ref,event=branch
+          type=sha,prefix=sha-
 
     - name: Build Docker image (PR - no push)
       if: github.event_name == 'pull_request'
