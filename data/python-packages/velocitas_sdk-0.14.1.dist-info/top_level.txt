@@ -1,2 +1,0 @@
-velocitas_examples
-velocitas_sdk
