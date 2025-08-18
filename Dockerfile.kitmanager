@@ -1,0 +1,41 @@
+# Simplified Dockerfile for Kit-Manager with Compilation Features
+FROM ubuntu:22.04
+
+# Install dependencies for compilation service
+RUN apt-get update && apt-get install -y \
+    curl \
+    build-essential cmake make gcc g++ \
+    ca-certificates \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js 18 (latest LTS with optional chaining support)
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && apt-get install -y nodejs
+
+# Create app directory
+WORKDIR /home/dev
+
+# Copy Kit-Manager files
+COPY Kit-Manager ./Kit-Manager
+COPY start_services.sh ./
+
+# Install Node.js dependencies
+WORKDIR /home/dev/Kit-Manager
+RUN npm install
+
+# Create data directories for compilation
+RUN mkdir -p /home/dev/data/ws /home/dev/data/output
+
+# Set environment variables
+ENV CONTAINER_MODE=true
+ENV KIT_MANAGER_PORT=3090
+
+# Expose port
+EXPOSE 3090
+
+# Set working directory
+WORKDIR /home/dev
+
+# Start Kit-Manager
+CMD ["node", "Kit-Manager/src/index.js"]
