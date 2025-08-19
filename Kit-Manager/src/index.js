@@ -301,26 +301,29 @@ io.on('connection', (socket) => {
         io.to(payload.request_from).emit('messageToKit-kitReply', payload)
     })
 
-    // Tree structure format detection and conversion
-    function treeToFlat(items, basePath = '') {
-        let files = {};
-        
-        function traverse(items, currentPath) {
-            if (!items) return;
-            
-            items.forEach(item => {
-                if (item.type === 'file' && item.content !== undefined) {
-                    const filePath = currentPath ? `${currentPath}/${item.name}` : item.name;
-                    files[filePath] = item.content;
-                } else if (item.type === 'folder' && item.items) {
-                    const newPath = currentPath ? `${currentPath}/${item.name}` : item.name;
-                    traverse(item.items, newPath);
-                }
-            });
+    // Native tree structure file writer
+    async function writeTreeStructure(items, baseDir, socket) {
+        for (const item of items) {
+            if (item.type === 'file' && item.content !== undefined) {
+                const filePath = path.join(baseDir, item.name);
+                const fileDir = path.dirname(filePath);
+                await fs.promises.mkdir(fileDir, { recursive: true });
+                await fs.promises.writeFile(filePath, item.content, 'utf8');
+                
+                await socket.emit("compile_cpp_reply", {
+                    "status": "file-written",
+                    "result": `Written file: ${item.name}\r\n`,
+                    "cmd": "compile_cpp",
+                    "data": "",
+                    "isDone": false,
+                    "code": 0
+                });
+            } else if (item.type === 'folder' && item.items) {
+                const folderPath = path.join(baseDir, item.name);
+                await fs.promises.mkdir(folderPath, { recursive: true });
+                await writeTreeStructure(item.items, folderPath, socket);
+            }
         }
-        
-        traverse(items, basePath);
-        return files;
     }
 
     // ============ C++ COMPILATION SERVICE ============
@@ -338,10 +341,15 @@ io.on('connection', (socket) => {
             return
         }
 
-        // Convert tree structure to flat files
-        const files = treeToFlat(data.files);
+        // Validate tree structure has files
+        function hasFiles(items) {
+            return items.some(item => 
+                item.type === 'file' || 
+                (item.type === 'folder' && item.items && hasFiles(item.items))
+            );
+        }
 
-        if(!files || Object.keys(files).length === 0) {
+        if(!hasFiles(data.files)) {
             socket.emit('compile_cpp_reply', {
                 "status": "err: invalid", 
                 "result": "No valid files found in tree structure\r\n",
@@ -379,7 +387,7 @@ io.on('connection', (socket) => {
             return
         }
 
-        // Write C++ files
+        // Write C++ files using native tree structure
         try {
             try {
                 if (fs.promises.rm) {
@@ -396,21 +404,8 @@ io.on('connection', (socket) => {
             }
             await fs.promises.mkdir(`${app_dir}/app/src`, { recursive: true });
 
-            for (const [filename, content] of Object.entries(files)) {
-                const filePath = path.join(`${app_dir}/app/src`, filename);
-                const fileDir = path.dirname(filePath);
-                await fs.promises.mkdir(fileDir, { recursive: true });
-                await fs.promises.writeFile(filePath, content, 'utf8');
-                
-                socket.emit("compile_cpp_reply", {
-                    "status": "file-written",
-                    "result": `Written file: ${filename}\r\n`,
-                    "cmd": "compile_cpp",
-                    "data": "",
-                    "isDone": false,
-                    "code": 0
-                })
-            }
+            // Write files directly from tree structure
+            await writeTreeStructure(data.files, `${app_dir}/app/src`, socket);
 
             const cmakeContent = `set(TARGET_NAME "app")
 
