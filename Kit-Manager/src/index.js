@@ -301,12 +301,50 @@ io.on('connection', (socket) => {
         io.to(payload.request_from).emit('messageToKit-kitReply', payload)
     })
 
+    // Tree structure format detection and conversion
+    function treeToFlat(items, basePath = '') {
+        let files = {};
+        
+        function traverse(items, currentPath) {
+            if (!items) return;
+            
+            items.forEach(item => {
+                if (item.type === 'file' && item.content !== undefined) {
+                    const filePath = currentPath ? `${currentPath}/${item.name}` : item.name;
+                    files[filePath] = item.content;
+                } else if (item.type === 'folder' && item.items) {
+                    const newPath = currentPath ? `${currentPath}/${item.name}` : item.name;
+                    traverse(item.items, newPath);
+                }
+            });
+        }
+        
+        traverse(items, basePath);
+        return files;
+    }
+
     // ============ C++ COMPILATION SERVICE ============
     socket.on('compile_cpp', async (data) => {
-        if(!data["files"] || !data["app_name"]) {
+        // Only support tree structure format
+        if(!data.files || !Array.isArray(data.files) || !data["app_name"]) {
             socket.emit('compile_cpp_reply', {
                 "status": "err: invalid",
-                "result": "Invalid request, missing files or app_name\r\n",
+                "result": "Invalid request. Only tree structure format supported. Expected files as array with type/name/content objects.\r\n",
+                "cmd": "compile_cpp",
+                "data": "",
+                "isDone": true,
+                "code": 1
+            })
+            return
+        }
+
+        // Convert tree structure to flat files
+        const files = treeToFlat(data.files);
+
+        if(!files || Object.keys(files).length === 0) {
+            socket.emit('compile_cpp_reply', {
+                "status": "err: invalid", 
+                "result": "No valid files found in tree structure\r\n",
                 "cmd": "compile_cpp",
                 "data": "",
                 "isDone": true,
@@ -358,7 +396,7 @@ io.on('connection', (socket) => {
             }
             await fs.promises.mkdir(`${app_dir}/app/src`, { recursive: true });
 
-            for (const [filename, content] of Object.entries(data.files)) {
+            for (const [filename, content] of Object.entries(files)) {
                 const filePath = path.join(`${app_dir}/app/src`, filename);
                 const fileDir = path.dirname(filePath);
                 await fs.promises.mkdir(fileDir, { recursive: true });
