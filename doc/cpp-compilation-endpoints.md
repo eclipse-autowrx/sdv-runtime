@@ -1,18 +1,39 @@
 # C++ Compilation WebSocket Endpoints
 
 ## Overview
-New C++ compilation service added to SDV Runtime Kit-Manager. Compile and run C++ code in real-time with multi-file support.
+C++ compilation service for SDV Runtime Kit-Manager. Compile and run C++ code in real-time using hierarchical tree structure format.
 
 ## Endpoint: `compile_cpp`
 
 ### Request Format
+
+The `compile_cpp` endpoint uses **tree structure format**:
 ```javascript
 socket.emit('compile_cpp', {
-    files: {
-        'main.cpp': 'C++ source code...',
-        'utils/helper.h': 'Header file...',
-        'vehicle/Vehicle.cpp': 'More source...'
-    },
+    files: [
+        {
+            type: "folder",
+            name: "src",
+            items: [
+                {
+                    type: "file",
+                    name: "main.cpp",
+                    content: "C++ source code..."
+                },
+                {
+                    type: "folder", 
+                    name: "utils",
+                    items: [
+                        {
+                            type: "file",
+                            name: "helper.h", 
+                            content: "Header file..."
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
     app_name: 'MyApp',
     run: true  // optional: run after compilation
 })
@@ -67,39 +88,58 @@ socket.emit('compile_cpp', {
 })
 ```
 
-### Multi-file Project
+### Multi-file Project (Tree Structure)
 ```javascript
-const files = {
-    'main.cpp': `
-#include "vehicle/Vehicle.h"
+const files = [
+    {
+        type: "folder",
+        name: "project",
+        items: [
+            {
+                type: "file",
+                name: "main.cpp",
+                content: `#include "vehicle/Vehicle.h"
 int main() {
     Vehicle car("SDV-001");
     car.start();
     return 0;
-}
-`,
-    'vehicle/Vehicle.h': `
-#pragma once
+}`
+            },
+            {
+                type: "folder",
+                name: "vehicle", 
+                items: [
+                    {
+                        type: "file",
+                        name: "Vehicle.h",
+                        content: `#pragma once
 #include <string>
 class Vehicle {
     std::string id;
 public:
     Vehicle(const std::string& id);
     void start();
-};
-`,
-    'vehicle/Vehicle.cpp': `
-#include "Vehicle.h"
+};`
+                    },
+                    {
+                        type: "file", 
+                        name: "Vehicle.cpp",
+                        content: `#include "Vehicle.h"
 #include <iostream>
 Vehicle::Vehicle(const std::string& id) : id(id) {}
 void Vehicle::start() {
     std::cout << "Vehicle " << id << " started!" << std::endl;
-}
-`
-}
+}`
+                    }
+                ]
+            }
+        ]
+    }
+];
 
 socket.emit('compile_cpp', { files, app_name: 'VehicleApp', run: true })
 ```
+
 
 ## Frontend Implementation Tips
 
@@ -160,14 +200,70 @@ const isError = (status) =>
 
 ## Testing the Endpoint
 
-Use the test files in `/test/` directory for incremental learning:
-- `/test/01-basic/` - Simple Hello World
-- `/test/02-multi-file/` - Multi-file projects  
-- `/test/03-complex/` - Advanced features
+Use the comprehensive test suite in `/test/` directory for progressive learning:
+
+### Basic Tests
+- `/test/01-hello-world/` - Simple Hello World (tree format)
+- `/test/02-tree-format/` - Tree structure demonstration
+- `/test/03-multi-file-tree/` - Multi-file project (tree format)
+- `/test/04-multi-file-tree/` - Multi-file with nested folders
+
+### Advanced Tests  
+- `/test/06-automotive-basic/` - Vehicle simulation with classes
+- `/test/08-stl-containers/` - STL containers and algorithms
+
+### Edge Cases
+- `/test/09-error-handling/` - Compilation error scenarios
+
+### Running Tests
+```bash
+# Run all tests
+node test/run-all-tests.js
+
+# Run specific category
+node test/run-all-tests.js --category=basic
+node test/run-all-tests.js --category=advanced
+node test/run-all-tests.js --category=edge
+
+# Run single test
+node test/run-all-tests.js 01-hello-world
+```
+
+## Tree Structure Format
+
+The Kit-Manager uses hierarchical tree structure format for better project organization:
+
+### Structure Requirements
+- Root array containing folder/file objects
+- Each object must have `type` property (`"file"` or `"folder"`)
+- Files require `name` and `content` properties
+- Folders require `name` and `items` array
+
+### Conversion Process
+1. Tree structure is parsed recursively
+2. Files are flattened with proper path separators
+3. Compilation proceeds with CMake auto-detection
+4. Headers and sources automatically linked
+
+### Example Tree Structure Patterns
+```javascript
+// Pattern 1: Single root folder
+[{type: "folder", name: "src", items: [...]}]
+
+// Pattern 2: Direct file array 
+[{type: "file", name: "main.cpp", content: "..."}]
+
+// Pattern 3: Mixed structure
+[
+    {type: "file", name: "main.cpp", content: "..."},
+    {type: "folder", name: "utils", items: [...]}
+]
+```
 
 ## Notes
+- **Tree Structure Only**: Only hierarchical format supported
+- **Path Handling**: Automatic nested path creation from tree structure
 - All Python endpoints (`messageToKit`) remain unchanged
-- Files support subdirectories (e.g., `utils/helper.h`)
 - CMake automatically finds headers and sources
 - Executables saved to output directory
 - Real-time streaming for live feedback

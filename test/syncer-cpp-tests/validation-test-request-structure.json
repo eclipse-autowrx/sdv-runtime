@@ -1,0 +1,7 @@
+[
+  {
+    "type": "file",
+    "name": "main.cpp",
+    "content": "#include <iostream>\n#include <vector>\n#include <string>\n#include <algorithm>\n\nclass Vehicle {\nprivate:\n    std::string id;\n    double speed;\n    std::vector<std::string> sensors;\n\npublic:\n    Vehicle(const std::string& vehicleId) : id(vehicleId), speed(0.0) {\n        sensors = {\"GPS\", \"Camera\", \"Lidar\", \"Radar\"};\n    }\n    \n    void accelerate(double increment) {\n        speed += increment;\n        std::cout << \"Vehicle \" << id << \" accelerating to \" << speed << \" km/h\" << std::endl;\n    }\n    \n    void reportStatus() {\n        std::cout << \"=== Vehicle Status Report ===\" << std::endl;\n        std::cout << \"ID: \" << id << std::endl;\n        std::cout << \"Speed: \" << speed << \" km/h\" << std::endl;\n        std::cout << \"Active Sensors: \";\n        for (const auto& sensor : sensors) {\n            std::cout << sensor << \" \";\n        }\n        std::cout << std::endl;\n        std::cout << \"Validation: Mock Kit Server → syncer.py → Kit-Manager WORKS!\" << std::endl;\n    }\n};\n\nint main() {\n    std::cout << \"🚗 SDV Runtime C++ Compilation Validation\" << std::endl;\n    \n    Vehicle testVehicle(\"SDV-TEST-001\");\n    testVehicle.accelerate(30.5);\n    testVehicle.accelerate(15.2);\n    testVehicle.reportStatus();\n    \n    std::cout << \"✅ Complex C++ compilation successful!\" << std::endl;\n    return 0;\n}"
+  }
+]

@@ -1,0 +1,7 @@
+[
+  {
+    "type": "file",
+    "name": "main.cpp",
+    "content": "#include <iostream>\nusing namespace std;\n\nint main() {\n    cout << \"Hello from Syncer C++ Test!\" << endl;\n    cout << \"Compilation successful through syncer.py\" << endl;\n    return 0;\n}"
+  }
+]

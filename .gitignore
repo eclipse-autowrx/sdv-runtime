@@ -15,4 +15,5 @@ data/custom-models/
 
 # C++ Compilation Output
 docker-output/
+output/
 node_modules/

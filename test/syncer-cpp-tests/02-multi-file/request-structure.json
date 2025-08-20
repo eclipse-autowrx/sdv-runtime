@@ -1,0 +1,45 @@
+[
+  {
+    "type": "folder",
+    "name": "project",
+    "items": [
+      {
+        "type": "file",
+        "name": "main.cpp",
+        "content": "#include \"math/Calculator.h\"\n#include \"utils/Logger.h\"\n#include <iostream>\n\nint main() {\n    Logger logger;\n    Calculator calc;\n    \n    logger.log(\"Starting syncer multi-file test\");\n    \n    int result = calc.add(10, 25);\n    logger.log(\"Calculation: 10 + 25 = \" + std::to_string(result));\n    \n    result = calc.multiply(4, 7);\n    logger.log(\"Calculation: 4 * 7 = \" + std::to_string(result));\n    \n    std::cout << \"Multi-file compilation through syncer successful!\" << std::endl;\n    return 0;\n}"
+      },
+      {
+        "type": "folder",
+        "name": "math",
+        "items": [
+          {
+            "type": "file",
+            "name": "Calculator.h",
+            "content": "#pragma once\n\nclass Calculator {\npublic:\n    int add(int a, int b);\n    int multiply(int a, int b);\n    int subtract(int a, int b);\n};"
+          },
+          {
+            "type": "file",
+            "name": "Calculator.cpp",
+            "content": "#include \"Calculator.h\"\n\nint Calculator::add(int a, int b) {\n    return a + b;\n}\n\nint Calculator::multiply(int a, int b) {\n    return a * b;\n}\n\nint Calculator::subtract(int a, int b) {\n    return a - b;\n}"
+          }
+        ]
+      },
+      {
+        "type": "folder",
+        "name": "utils",
+        "items": [
+          {
+            "type": "file",
+            "name": "Logger.h",
+            "content": "#pragma once\n#include <string>\n\nclass Logger {\npublic:\n    void log(const std::string& message);\n    void error(const std::string& message);\n};"
+          },
+          {
+            "type": "file",
+            "name": "Logger.cpp",
+            "content": "#include \"Logger.h\"\n#include <iostream>\n#include <ctime>\n\nvoid Logger::log(const std::string& message) {\n    std::time_t now = std::time(0);\n    std::cout << \"[LOG] \" << message << std::endl;\n}\n\nvoid Logger::error(const std::string& message) {\n    std::cout << \"[ERROR] \" << message << std::endl;\n}"
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -1,0 +1,7 @@
+[
+  {
+    "type": "file",
+    "name": "broken.cpp",
+    "content": "#include <iostream>\nusing namespace std;\n\nint main() {\n    cout << \"This will fail to compile\" << endl;\n    \n    // Intentional syntax error - missing semicolon\n    undefined_function()\n    \n    return 0;\n}"
+  }
+]

@@ -301,12 +301,58 @@ io.on('connection', (socket) => {
         io.to(payload.request_from).emit('messageToKit-kitReply', payload)
     })
 
+    // Native tree structure file writer
+    async function writeTreeStructure(items, baseDir, socket) {
+        for (const item of items) {
+            if (item.type === 'file' && item.content !== undefined) {
+                const filePath = path.join(baseDir, item.name);
+                const fileDir = path.dirname(filePath);
+                await fs.promises.mkdir(fileDir, { recursive: true });
+                await fs.promises.writeFile(filePath, item.content, 'utf8');
+                
+                await socket.emit("compile_cpp_reply", {
+                    "status": "file-written",
+                    "result": `Written file: ${item.name}\r\n`,
+                    "cmd": "compile_cpp",
+                    "data": "",
+                    "isDone": false,
+                    "code": 0
+                });
+            } else if (item.type === 'folder' && item.items) {
+                const folderPath = path.join(baseDir, item.name);
+                await fs.promises.mkdir(folderPath, { recursive: true });
+                await writeTreeStructure(item.items, folderPath, socket);
+            }
+        }
+    }
+
     // ============ C++ COMPILATION SERVICE ============
     socket.on('compile_cpp', async (data) => {
-        if(!data["files"] || !data["app_name"]) {
+        // Only support tree structure format
+        if(!data.files || !Array.isArray(data.files) || !data["app_name"]) {
             socket.emit('compile_cpp_reply', {
                 "status": "err: invalid",
-                "result": "Invalid request, missing files or app_name\r\n",
+                "result": "Invalid request. Only tree structure format supported. Expected files as array with type/name/content objects.\r\n",
+                "cmd": "compile_cpp",
+                "data": "",
+                "isDone": true,
+                "code": 1
+            })
+            return
+        }
+
+        // Validate tree structure has files
+        function hasFiles(items) {
+            return items.some(item => 
+                item.type === 'file' || 
+                (item.type === 'folder' && item.items && hasFiles(item.items))
+            );
+        }
+
+        if(!hasFiles(data.files)) {
+            socket.emit('compile_cpp_reply', {
+                "status": "err: invalid", 
+                "result": "No valid files found in tree structure\r\n",
                 "cmd": "compile_cpp",
                 "data": "",
                 "isDone": true,
@@ -341,7 +387,7 @@ io.on('connection', (socket) => {
             return
         }
 
-        // Write C++ files
+        // Write C++ files using native tree structure
         try {
             try {
                 if (fs.promises.rm) {
@@ -358,21 +404,8 @@ io.on('connection', (socket) => {
             }
             await fs.promises.mkdir(`${app_dir}/app/src`, { recursive: true });
 
-            for (const [filename, content] of Object.entries(data.files)) {
-                const filePath = path.join(`${app_dir}/app/src`, filename);
-                const fileDir = path.dirname(filePath);
-                await fs.promises.mkdir(fileDir, { recursive: true });
-                await fs.promises.writeFile(filePath, content, 'utf8');
-                
-                socket.emit("compile_cpp_reply", {
-                    "status": "file-written",
-                    "result": `Written file: ${filename}\r\n`,
-                    "cmd": "compile_cpp",
-                    "data": "",
-                    "isDone": false,
-                    "code": 0
-                })
-            }
+            // Write files directly from tree structure
+            await writeTreeStructure(data.files, `${app_dir}/app/src`, socket);
 
             const cmakeContent = `set(TARGET_NAME "app")
 

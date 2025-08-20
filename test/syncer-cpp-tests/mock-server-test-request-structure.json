@@ -1,0 +1,7 @@
+[
+  {
+    "type": "file",
+    "name": "main.cpp",
+    "content": "#include <iostream>\nusing namespace std;\n\nint main() {\n    cout << \"Hello from Mock Kit Server Test!\" << endl;\n    cout << \"Architecture: Mock Kit Server -> syncer.py -> Kit-Manager\" << endl;\n    return 0;\n}"
+  }
+]
