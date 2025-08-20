@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: MIT
 
 // Test 01: Basic Hello World through syncer.py
+// Reference: See request-structure.json for the complete tree structure being sent to syncer.py
 const { runSyncerTest, validateSyncerResponses, createSingleFile } = require('../utils/syncer-test-config');
 
 const TEST_NAME = '01 Basic Hello World (via Syncer)';

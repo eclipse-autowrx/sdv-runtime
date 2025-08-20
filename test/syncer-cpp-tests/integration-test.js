@@ -8,6 +8,7 @@
 
 /**
  * Integration Test for Syncer C++ Compilation
+ * Reference: See integration-test-request-structure.json for details on how this test works
  * Tests the complete production flow: Web Frontend → syncer.py → Kit-Manager
  */
 

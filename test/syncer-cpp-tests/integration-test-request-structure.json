@@ -1,0 +1,7 @@
+[
+  {
+    "type": "file",
+    "name": "README.md",
+    "content": "# Integration Test Request Structure\n\nThe integration test doesn't send specific request structures as it tests existing compiled executables in the output directory. It validates that the syncer.py → Kit-Manager compilation pipeline has been working correctly by:\n\n1. Checking for recent executables in the output directory\n2. Running the most recent executable to verify it works\n3. Validating the complete production architecture\n\nThis test is designed to work with any C++ program that has been successfully compiled through the syncer.py middleware."
+  }
+]

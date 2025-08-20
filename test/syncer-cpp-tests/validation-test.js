@@ -1,4 +1,5 @@
 // Validation test with a more complex C++ program
+// Reference: See validation-test-request-structure.json for the complete tree structure being sent to syncer.py
 const MockKitServer = require('./utils/mock-kit-server');
 
 const COMPLEX_CPP = `#include <iostream>

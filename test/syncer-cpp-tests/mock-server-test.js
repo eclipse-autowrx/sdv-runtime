@@ -8,6 +8,7 @@
 
 /**
  * Mock Kit Server Test for syncer.py C++ Compilation
+ * Reference: See mock-server-test-request-structure.json for the complete tree structure being sent to syncer.py
  * 
  * This test demonstrates the correct way to test syncer.py C++ compilation:
  * 1. Start a mock kit server (simulates kit.digitalauto.tech)

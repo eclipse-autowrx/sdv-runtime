@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: MIT
 
 // Test 02: Multi-file Project through syncer.py
+// Reference: See request-structure.json for the complete tree structure being sent to syncer.py
 const { runSyncerTest, validateSyncerResponses } = require('../utils/syncer-test-config');
 
 const TEST_NAME = '02 Multi-file Project (via Syncer)';
