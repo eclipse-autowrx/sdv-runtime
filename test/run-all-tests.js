@@ -35,8 +35,8 @@ class TestSuiteRunner {
     }
 
     async run() {
-        console.log('🧪 SDV Runtime C++ Compilation Test Suite');
-        console.log('═'.repeat(60));
+        console.log('SDV Runtime C++ Compilation Test Suite');
+        console.log('='.repeat(60));
         
         // Determine which tests to run
         let testsToRun = TESTS;
@@ -44,21 +44,21 @@ class TestSuiteRunner {
         if (singleTest) {
             testsToRun = TESTS.filter(t => t.id === singleTest);
             if (testsToRun.length === 0) {
-                console.log(`❌ Test '${singleTest}' not found`);
+                console.log(`[ERROR] Test '${singleTest}' not found`);
                 console.log('Available tests:', TESTS.map(t => t.id).join(', '));
                 process.exit(1);
             }
         } else if (categoryFilter) {
             testsToRun = TESTS.filter(t => t.category === categoryFilter);
             if (testsToRun.length === 0) {
-                console.log(`❌ No tests found for category '${categoryFilter}'`);
+                console.log(`[ERROR] No tests found for category '${categoryFilter}'`);
                 console.log('Available categories: basic, advanced, edge');
                 process.exit(1);
             }
         }
 
-        console.log(`📋 Running ${testsToRun.length} tests`);
-        if (categoryFilter) console.log(`📂 Category filter: ${categoryFilter}`);
+        console.log(`Running ${testsToRun.length} tests`);
+        if (categoryFilter) console.log(`Category filter: ${categoryFilter}`);
         console.log('');
 
         // Check prerequisites
@@ -74,14 +74,14 @@ class TestSuiteRunner {
     }
 
     async checkPrerequisites() {
-        console.log('🔍 Checking prerequisites...');
+        console.log('Checking prerequisites...');
         
         // Check if socket.io-client is installed
         try {
             require.resolve('socket.io-client');
-            console.log('✅ socket.io-client found');
+            console.log('[PASS] socket.io-client found');
         } catch (e) {
-            console.log('❌ socket.io-client not found');
+            console.log('[FAIL] socket.io-client not found');
             console.log('   Run: npm install socket.io-client');
             process.exit(1);
         }
@@ -106,9 +106,9 @@ class TestSuiteRunner {
         });
 
         if (isPortOpen) {
-            console.log('✅ SDV Runtime container responding on port 3090');
+            console.log('[PASS] SDV Runtime container responding on port 3090');
         } else {
-            console.log('❌ SDV Runtime container not accessible on port 3090');
+            console.log('[FAIL] SDV Runtime container not accessible on port 3090');
             console.log('   Start container with:');
             console.log('   docker run -d --name sdv-runtime-test --user root \\');
             console.log('     -p 3090:3090 -p 55555:55555 \\');
@@ -132,11 +132,11 @@ class TestSuiteRunner {
                 message: 'Test file not found',
                 duration: 0
             });
-            console.log(`⏭️  SKIP: ${test.id} (test file not found)`);
+            console.log(`[SKIP] ${test.id} (test file not found)`);
             return;
         }
 
-        console.log(`🏃 Running: ${test.id}`);
+        console.log(`Running: ${test.id}`);
         const startTime = Date.now();
 
         try {
@@ -150,7 +150,7 @@ class TestSuiteRunner {
                     message: 'Test completed successfully',
                     duration: duration
                 });
-                console.log(`✅ PASS: ${test.id} (${(duration/1000).toFixed(1)}s)`);
+                console.log(`[PASS] ${test.id} (${(duration/1000).toFixed(1)}s)`);
             } else {
                 this.results.push({
                     id: test.id,
@@ -158,7 +158,7 @@ class TestSuiteRunner {
                     message: `Exit code: ${result.code}`,
                     duration: duration
                 });
-                console.log(`❌ FAIL: ${test.id} (exit code: ${result.code})`);
+                console.log(`[FAIL] ${test.id} (exit code: ${result.code})`);
             }
         } catch (error) {
             const duration = Date.now() - startTime;
@@ -168,7 +168,7 @@ class TestSuiteRunner {
                 message: error.message,
                 duration: duration
             });
-            console.log(`💥 ERROR: ${test.id} (${error.message})`);
+            console.log(`[ERROR] ${test.id} (${error.message})`);
         }
 
         console.log(''); // Separator between tests
@@ -215,19 +215,19 @@ class TestSuiteRunner {
     showSummary() {
         const totalTime = ((Date.now() - this.startTime) / 1000).toFixed(1);
         
-        console.log('📊 Test Suite Summary');
-        console.log('═'.repeat(60));
+        console.log('Test Suite Summary');
+        console.log('='.repeat(60));
         
         const passed = this.results.filter(r => r.status === 'PASS').length;
         const failed = this.results.filter(r => r.status === 'FAIL').length;
         const errors = this.results.filter(r => r.status === 'ERROR').length;
         const skipped = this.results.filter(r => r.status === 'SKIP').length;
         
-        console.log(`✅ Passed: ${passed}`);
-        console.log(`❌ Failed: ${failed}`);
-        console.log(`💥 Errors: ${errors}`);
-        console.log(`⏭️  Skipped: ${skipped}`);
-        console.log(`⏱️  Total time: ${totalTime}s`);
+        console.log(`Passed: ${passed}`);
+        console.log(`Failed: ${failed}`);
+        console.log(`Errors: ${errors}`);
+        console.log(`Skipped: ${skipped}`);
+        console.log(`Total time: ${totalTime}s`);
         
         console.log('\\nDetailed Results:');
         this.results.forEach(result => {
@@ -238,21 +238,21 @@ class TestSuiteRunner {
         console.log('');
         
         if (failed > 0 || errors > 0) {
-            console.log('❌ Some tests failed. Check the output above for details.');
+            console.log('[RESULT] Some tests failed. Check the output above for details.');
             process.exit(1);
         } else {
-            console.log('🎉 All tests passed successfully!');
+            console.log('[RESULT] All tests passed successfully!');
             process.exit(0);
         }
     }
 
     getStatusIcon(status) {
         switch (status) {
-            case 'PASS': return '✅';
-            case 'FAIL': return '❌';
-            case 'ERROR': return '💥';
-            case 'SKIP': return '⏭️ ';
-            default: return '❓';
+            case 'PASS': return '[PASS]';
+            case 'FAIL': return '[FAIL]';
+            case 'ERROR': return '[ERROR]';
+            case 'SKIP': return '[SKIP]';
+            default: return '[UNKNOWN]';
         }
     }
 }

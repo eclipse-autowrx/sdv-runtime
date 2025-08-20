@@ -26,8 +26,8 @@ class TestRunner {
             shouldFail = false
         } = config;
 
-        console.log(`🔌 ${testName}`);
-        console.log('─'.repeat(60));
+        console.log(`${testName}`);
+        console.log('-'.repeat(60));
         
         this.socket = io('http://localhost:3090');
         this.startTime = Date.now();
@@ -37,18 +37,18 @@ class TestRunner {
 
         // Set up timeout
         setTimeout(() => {
-            console.log('\n⏰ Test timeout');
+            console.log('\nTest timeout');
             this.cleanup();
         }, timeout);
 
         // Wait for connection
         this.socket.on('connect', () => {
-            console.log('✅ Connected to SDV Runtime\n');
+            console.log('Connected to SDV Runtime\n');
             
             // Show file structure
             this.showFileStructure(files);
             
-            console.log('\n🔨 Starting compilation...\n');
+            console.log('\nStarting compilation...\n');
             
             // Send compilation request
             this.socket.emit('compile_cpp', {
@@ -59,27 +59,27 @@ class TestRunner {
         });
 
         this.socket.on('connect_error', (error) => {
-            console.log('❌ Connection failed:', error.message);
-            console.log('💡 Make sure SDV Runtime container is running:');
+            console.log('Connection failed:', error.message);
+            console.log('Make sure SDV Runtime container is running:');
             console.log('   docker logs sdv-runtime-test | grep "Kit Manager"');
             process.exit(1);
         });
     }
 
     showFileStructure(files) {
-        console.log('📁 File Structure:');
+        console.log('File Structure:');
         
         if (Array.isArray(files)) {
-            console.log('📊 Format: Tree Structure');
+            console.log('Format: Tree Structure');
             this.printTreeStructure(files, '');
         } else if (typeof files === 'object' && files.type) {
-            console.log('📊 Format: Tree Structure (Single Object)');
+            console.log('Format: Tree Structure (Single Object)');
             this.printTreeStructure([files], '');
         } else {
-            console.log('📊 Format: Flat Structure');
+            console.log('Format: Flat Structure');
             Object.keys(files).forEach(filename => {
                 const lines = files[filename].split('\n').length;
-                console.log(`   📄 ${filename} (${lines} lines)`);
+                console.log(`   ${filename} (${lines} lines)`);
             });
         }
     }
@@ -88,9 +88,9 @@ class TestRunner {
         items.forEach(item => {
             if (item.type === 'file') {
                 const lines = item.content ? item.content.split('\n').length : 0;
-                console.log(`${indent}   📄 ${item.name} (${lines} lines)`);
+                console.log(`${indent}   ${item.name} (${lines} lines)`);
             } else if (item.type === 'folder') {
-                console.log(`${indent}   📂 ${item.name}/`);
+                console.log(`${indent}   ${item.name}/`);
                 if (item.items) {
                     this.printTreeStructure(item.items, indent + '  ');
                 }
@@ -106,34 +106,34 @@ class TestRunner {
 
         this.socket.on('compile_cpp_reply', (response) => {
             if (response.status === 'compile-start') {
-                console.log('🚀 Compilation started');
+                console.log('Compilation started');
             } else if (response.status === 'file-written') {
                 fileCount++;
-                console.log(`📝 Written: ${response.result.trim()}`);
+                console.log(`Written: ${response.result.trim()}`);
             } else if (response.status.includes('configure')) {
-                console.log(`🔧 ${response.result.trim()}`);
+                console.log(`[Configure] ${response.result.trim()}`);
                 if (response.status.includes('stderr')) {
                     buildOutput.push(response.result);
                 }
             } else if (response.status.includes('build')) {
-                console.log(`🔨 ${response.result.trim()}`);
+                console.log(`[Build] ${response.result.trim()}`);
                 buildOutput.push(response.result);
             } else if (response.status.includes('run')) {
                 if (response.status === 'run-stdout') {
-                    console.log(`🏃 ${response.result.trim()}`);
+                    console.log(`[Run] ${response.result.trim()}`);
                     runOutput.push(response.result.trim());
                 } else {
-                    console.log(`🔄 ${response.result.trim()}`);
+                    console.log(`[Run Status] ${response.result.trim()}`);
                 }
             } else if (response.status.includes('failed') || response.status.includes('err')) {
-                console.log(`❌ ${response.result.trim()}`);
+                console.log(`[Error] ${response.result.trim()}`);
                 hasErrors = true;
             }
 
             // Handle completion
             if (response.isDone) {
                 const elapsed = ((Date.now() - this.startTime) / 1000).toFixed(1);
-                console.log(`\n⏱️  Total time: ${elapsed}s`);
+                console.log(`\nTotal time: ${elapsed}s`);
                 
                 this.handleTestCompletion(
                     testName, 
@@ -153,16 +153,16 @@ class TestRunner {
         
         if (shouldFail) {
             if (code !== 0 || hasErrors) {
-                console.log('✅ SUCCESS: Test correctly failed as expected');
-                console.log(`📊 Error handling test passed`);
+                console.log('[SUCCESS] Test correctly failed as expected');
+                console.log(`Error handling test passed`);
             } else {
-                console.log('❌ FAILED: Test should have failed but succeeded');
+                console.log('[FAILED] Test should have failed but succeeded');
             }
         } else {
             if (code === 0 && !hasErrors) {
-                console.log('✅ SUCCESS: Compilation and execution completed!');
-                console.log(`📊 Files processed: ${fileCount}`);
-                console.log(`📊 Exit code: ${code}`);
+                console.log('[SUCCESS] Compilation and execution completed!');
+                console.log(`Files processed: ${fileCount}`);
+                console.log(`Exit code: ${code}`);
                 
                 // Validate expected output if provided
                 if (expectedOutput) {
@@ -170,19 +170,19 @@ class TestRunner {
                     const expected = expectedOutput.toLowerCase();
                     
                     if (actualOutput.includes(expected)) {
-                        console.log('✅ Output validation passed');
+                        console.log('[PASS] Output validation passed');
                     } else {
-                        console.log('⚠️  Output validation failed');
+                        console.log('[WARN] Output validation failed');
                         console.log(`   Expected: "${expected}"`);
                         console.log(`   Got: "${actualOutput}"`);
                     }
                 }
                 
-                console.log('✅ Binary saved to output/ directory');
+                console.log('[INFO] Binary saved to output/ directory');
             } else {
-                console.log('❌ FAILED: Compilation or execution error');
-                console.log(`📊 Exit code: ${code}`);
-                console.log(`📊 Had errors: ${hasErrors}`);
+                console.log('[FAILED] Compilation or execution error');
+                console.log(`Exit code: ${code}`);
+                console.log(`Had errors: ${hasErrors}`);
             }
         }
         

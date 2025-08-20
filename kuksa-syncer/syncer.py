@@ -45,6 +45,10 @@ lsOfApiSubscriber = {}
 
 sio = socketio.AsyncClient()
 
+# Kit-Manager connection for C++ compilation
+kit_manager_sio = None
+KIT_MANAGER_URL = 'http://127.0.0.1:3090'
+
 client = VSSClient(BORKER_IP, BROKER_PORT)
 
 mock_signal_path = "/home/dev/ws/mock/signals.json"
@@ -81,6 +85,19 @@ async def send_app_deploy_reply(master_id, content, is_finish, cmd="deploy-reque
         "data": "",
         "result": content,
         "is_finish": is_finish
+    })
+
+async def send_cpp_compile_reply(master_id, status, result, is_done, code, data=""):
+    """Send C++ compilation status back to the web client"""
+    await sio.emit("messageToKit-kitReply", {
+        "kit_id": CLIENT_ID,
+        "request_from": master_id,
+        "cmd": "compile_cpp_app",
+        "status": status,
+        "data": data,
+        "isDone": is_done,
+        "result": result,
+        "code": code
     })
 
 def process_done(master_id: str, retcode: int):
@@ -442,6 +459,67 @@ async def messageToKit(data):
             
         })
         return 0
+    
+    elif data["cmd"] == "compile_cpp_app":
+        """Handle C++ compilation requests by forwarding to Kit-Manager"""
+        global kit_manager_sio
+        
+        # Validate request
+        if "data" not in data or "files" not in data["data"] or "app_name" not in data["data"]:
+            await send_cpp_compile_reply(
+                data["request_from"],
+                "err: invalid",
+                "Invalid request. Expected data with files (tree structure) and app_name.\r\n",
+                True,
+                1
+            )
+            return 0
+        
+        try:
+            # Initialize Kit-Manager connection if needed
+            if kit_manager_sio is None:
+                kit_manager_sio = socketio.AsyncClient()
+                
+                # Set up event handlers for Kit-Manager responses
+                @kit_manager_sio.on('compile_cpp_reply')
+                async def on_cpp_reply(msg):
+                    """Forward C++ compilation responses back to web client"""
+                    # Get the original requester from our tracking
+                    if hasattr(kit_manager_sio, 'current_requester'):
+                        await send_cpp_compile_reply(
+                            kit_manager_sio.current_requester,
+                            msg.get("status", ""),
+                            msg.get("result", ""),
+                            msg.get("isDone", False),
+                            msg.get("code", 0),
+                            msg.get("data", "")
+                        )
+                
+                # Connect to Kit-Manager
+                await kit_manager_sio.connect(KIT_MANAGER_URL)
+                print(f"Connected to Kit-Manager at {KIT_MANAGER_URL} for C++ compilation", flush=True)
+            
+            # Track the requester
+            kit_manager_sio.current_requester = data["request_from"]
+            
+            # Forward the compilation request to Kit-Manager
+            await kit_manager_sio.emit('compile_cpp', {
+                'files': data["data"]["files"],
+                'app_name': data["data"]["app_name"],
+                'run': data["data"].get("run", False)
+            })
+            
+        except Exception as e:
+            print(f"Error connecting to Kit-Manager: {str(e)}", flush=True)
+            await send_cpp_compile_reply(
+                data["request_from"],
+                "err: connection",
+                f"Failed to connect to Kit-Manager: {str(e)}\r\n",
+                True,
+                1
+            )
+        return 0
+    
     return 1
 
 def convertLsOfRunnerToJson(lsOfRunner):
