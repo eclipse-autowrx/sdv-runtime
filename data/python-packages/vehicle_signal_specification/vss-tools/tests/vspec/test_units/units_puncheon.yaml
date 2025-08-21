@@ -1,5 +1,0 @@
-units:
-  puncheon:
-    label: Puncheon
-    description: Volume measure in puncheons (1 puncheon = 318 liters)
-    domain: volume
