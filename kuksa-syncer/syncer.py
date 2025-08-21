@@ -34,6 +34,7 @@ BROKER_PORT = 55555
 
 DEFAULT_KIT_SERVER = 'https://kit.digitalauto.tech'
 DEFAULT_RUNTIME_NAME = 'MyRuntime'
+DEFAULT_RUNTIME_PREFIX = 'Runtime-'
 
 TIME_TO_KEEP_SUBSCRIBER_ALIVE = 60
 TIME_TO_KEEP_RUNNER_ALIVE = 3*60
@@ -723,7 +724,9 @@ async def ticker_5s():
 async def main():
     SERVER = os.getenv('SYNCER_SERVER_URL', DEFAULT_KIT_SERVER) + ""
     global CLIENT_ID
-    CLIENT_ID = "RunTime-" + os.getenv('RUNTIME_NAME', DEFAULT_RUNTIME_NAME)
+    runtime_prefix = os.getenv('RUNTIME_PREFIX', DEFAULT_RUNTIME_PREFIX)
+    runtime_name = os.getenv('RUNTIME_NAME', DEFAULT_RUNTIME_NAME)
+    CLIENT_ID = runtime_prefix + runtime_name
     print("RunTime display name: " + CLIENT_ID, flush=True)
 
     await client.connect()
