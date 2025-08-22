@@ -75,6 +75,11 @@ class MockService(BaseService):
         self._last_tick = time.perf_counter()
         self._pending_event_list: List[Event] = list()
         self._mocked_datapoints: Dict[str, MockedDataPoint] = dict()
+        self._last_activity_time = time.perf_counter()
+        self._idle_threshold = float(os.getenv("MOCK_IDLE_THRESHOLD", "30.0"))  # seconds of inactivity before entering idle mode
+        self._is_idle = False
+        self._base_sleep_duration = float(os.getenv("MOCK_BASE_SLEEP", "0.1"))  # base sleep time in active mode
+        self._idle_sleep_duration = float(os.getenv("MOCK_IDLE_SLEEP", "1.0"))  # sleep time when idle
 
     # this will work if mock.py is provided
     def on_databroker_connected(self):
@@ -109,6 +114,36 @@ class MockService(BaseService):
             self._subscribe_to_mocked_datapoints()
             if self._registered is False:
                 self._registered = True
+            self._update_activity_timestamp()
+
+    def _update_activity_timestamp(self):
+        """Update the last activity timestamp and exit idle mode if needed."""
+        current_time = time.perf_counter()
+        self._last_activity_time = current_time
+        if self._is_idle:
+            self._is_idle = False
+            log.info("Mock service exiting idle mode - activity detected")
+
+    def _check_idle_state(self):
+        """Check if the service should enter idle mode based on inactivity."""
+        current_time = time.perf_counter()
+        time_since_activity = current_time - self._last_activity_time
+        
+        if not self._is_idle and time_since_activity > self._idle_threshold:
+            self._is_idle = True
+            log.info("Mock service entering idle mode - no activity for %.1f seconds", time_since_activity)
+        
+        return self._is_idle
+
+    def _has_active_animations(self):
+        """Check if there are any active animations running."""
+        for _, datapoint in self._mocked_datapoints.items():
+            for behavior in datapoint.behaviors:
+                action = behavior._action
+                if type(action) is AnimationAction:
+                    if not action._animator.is_done():
+                        return True
+        return False
 
     def main_loop(self):
         """Main execution loop which checks if behaviors shall be executed."""
@@ -121,23 +156,39 @@ class MockService(BaseService):
                 self.check_for_new_mocks()
                 current_tick_time = time.perf_counter()
                 delta_time: float = current_tick_time - self._last_tick
-                self._behavior_executor.execute(delta_time)
+                
+                # Check for idle state
+                is_idle = self._check_idle_state()
+                has_events = len(self._pending_event_list) > 0
+                has_animations = self._has_active_animations()
+                
+                # Only execute behaviors and animations if not idle or if there's activity
+                if not is_idle or has_events or has_animations:
+                    if has_events or has_animations:
+                        self._update_activity_timestamp()
+                    
+                    self._behavior_executor.execute(delta_time)
 
-                for _, datapoint in self._mocked_datapoints.items():
-                    for behavior in datapoint.behaviors:
-                        action = behavior._action
-                        if type(action) is AnimationAction:
-                            if not action._animator.is_done():
-                                action._animator.tick(delta_time)
+                    for _, datapoint in self._mocked_datapoints.items():
+                        for behavior in datapoint.behaviors:
+                            action = behavior._action
+                            if type(action) is AnimationAction:
+                                if not action._animator.is_done():
+                                    action._animator.tick(delta_time)
 
                 self._last_tick = time.perf_counter()
 
-                time.sleep(0.1)
+                # Use different sleep durations based on idle state
+                if is_idle and not has_events and not has_animations:
+                    time.sleep(self._idle_sleep_duration)
+                else:
+                    time.sleep(self._base_sleep_duration)
         except Exception as exception:
             log.exception(exception)
 
     def _on_datapoint_updated(self, datapoint: DataPoint):
         """Callback whenever the value of a datapoint datapoint changes."""
+        self._update_activity_timestamp()
         self._set_datapoint(datapoint.path, datapoint.value)
 
     def _feed_initial_values(self):
@@ -162,6 +213,7 @@ class MockService(BaseService):
                             self._pending_event_list.append(
                                 Event(type, path, raw_value)
                             )
+                            self._update_activity_timestamp()
         except Exception as e:
             log.exception(e)
             raise
