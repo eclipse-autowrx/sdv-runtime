@@ -274,7 +274,8 @@ async def messageToKit(data):
                     print(f"Tracked C++ process PID {pid} for client {from_id}", flush=True)
                     
                     # Get watch_vars from data if present, else use default
-                    watch_vars = data.get("watch_vars", "")
+                    watch_vars = data["data"].get("watch_vars", "")
+                    print(f"Watch vars: {watch_vars}", flush=True)
                     # Check if watch_vars is empty or only whitespace after trimming
                     if watch_vars is not None and watch_vars.strip():
                         # Start periodic monitoring of global variables
@@ -335,9 +336,7 @@ async def messageToKit(data):
             await send_reply(from_id, "All processes stopped successfully\r\n", is_done=True, retcode=0)
         else:
             await send_reply(from_id, "No processes found to stop\r\n", is_done=True, retcode=0)
-        return 0
-        
-
+        return 0        
     
     elif data["cmd"] == "get-runtime-info":
         return 0
@@ -353,38 +352,75 @@ async def messageToKit(data):
             await send_reply(from_id, "No C++ processes found to stop", is_done=True, retcode=0)
         return 0
     
-    elif data["cmd"] == "set_global_variable":
-        """Set a global variable value remotely in a running C++ process"""
+    elif data["cmd"] == "set_vars_value":
+        """Set global variable values remotely in a running C++ process"""
         from_id = data["request_from"]
+
+        f'''
+        Sample data["data"]: {
+            "counter": 10,
+            "foo": 1.23,
+            "bar": "Hello, World!"
+        }
+        '''
         
-        # Extract variable name and new value from data
-        var_name = data.get("var_name")
-        new_value = data.get("new_value")
+        # Extract variables from data - variables are stored as key-value pairs
+        variables_data = data["data"]
         
-        if not var_name or new_value is None:
-            await send_reply(from_id, "Missing var_name or new_value", is_error=True, retcode=1)
+        if not variables_data:
+            await send_reply(from_id, "No variables data provided", is_error=True, retcode=1)
             return 0
         
         # Find the client's running processes
-        if from_id in cpp_processes and cpp_processes[from_id]:
-            # Use the first running process (or iterate through all)
-            process_info = cpp_processes[from_id][0]
-            pid = process_info["pid"]
+        if from_id not in cpp_processes or not cpp_processes[from_id]:
+            await send_reply(from_id, "No running C++ processes found\r\n", is_error=True, retcode=1)
+            print(f"No running processes found for client {from_id}", flush=True)
+            return 0
+        
+        # Use the first running process (or iterate through all)
+        process_info = cpp_processes[from_id][0]
+        pid = process_info["pid"]
+        
+        print(f"Setting variables for client {from_id} (PID: {pid}): {variables_data}", flush=True)
+        
+        # Track results for multiple variable operations
+        results = []
+        success_count = 0
+        total_count = 0
+        
+        # Set multiple variables as key-value pairs
+        for var_name, new_value in variables_data.items():
+            total_count += 1
             
-            print(f"Setting variable {var_name} = {new_value} for client {from_id} (PID: {pid})", flush=True)
+            # Skip internal fields that aren't actual variables
+            if var_name in ["request_id", "timestamp", "session_id"]:
+                continue
             
-            # Set the variable
             success, message = await cpp_debugger_util.set_global_variable(var_name, new_value, pid)
             
             if success:
-                await send_reply(from_id, f"Variable {var_name} set to {new_value}\r\n", is_done=False, retcode=0)
+                results.append(f"✓ {var_name} = {new_value}")
+                success_count += 1
                 print(f"Successfully set {var_name} = {new_value} for client {from_id}", flush=True)
             else:
-                await send_reply(from_id, f"Failed to set variable: {message}\r\n", is_error=True, retcode=1)
+                results.append(f"✗ {var_name}: {message}")
                 print(f"Failed to set {var_name} = {new_value} for client {from_id}: {message}", flush=True)
+        
+        # Send comprehensive response
+        if total_count == 0:
+            await send_reply(from_id, "No valid variables to set", is_error=True, retcode=1)
+        elif success_count == total_count:
+            # All variables set successfully
+            response_msg = f"All variables set successfully:\n" + "\n".join(results)
+            await send_reply(from_id, response_msg + "\r\n", is_done=False, retcode=0)
+        elif success_count > 0:
+            # Partial success
+            response_msg = f"Partial success ({success_count}/{total_count} variables set):\n" + "\n".join(results)
+            await send_reply(from_id, response_msg + "\r\n", is_done=False, retcode=0)
         else:
-            await send_reply(from_id, "No running C++ processes found\r\n", is_error=True, retcode=1)
-            print(f"No running processes found for client {from_id}", flush=True)
+            # All variables failed
+            response_msg = f"Failed to set any variables:\n" + "\n".join(results)
+            await send_reply(from_id, response_msg + "\r\n", is_error=True, retcode=1)
         
         return 0
     

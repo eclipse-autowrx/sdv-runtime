@@ -174,19 +174,35 @@ async def periodic_global_var_report(interval, sio, client_id, watch_vars, pid, 
         timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         if values is not None:
             print(f"[{timestamp}] Global variables: {values}", flush=True)
-            await sio.emit("trace_vars", {
+            # INSERT_YOUR_CODE
+            # If values is a string (from get_global_variables), try to parse it into a dict of {var_name: value}
+            # If it's already a dict, use as is.
+            # Otherwise, fallback to sending as-is.
+            result_data = {}
+            if isinstance(values, dict):
+                result_data = values
+            elif isinstance(values, str):
+                # Try to parse lines like "counter = 42\nfoo = 1.23"
+                for line in values.strip().splitlines():
+                    if '=' in line:
+                        k, v = line.split('=', 1)
+                        result_data[k.strip()] = v.strip()
+            else:
+                # fallback
+                result_data = {"value": values}
+            await sio.emit("messageToKit-kitReply", {
                 "kit_id": client_id,
                 "request_from": from_id,
-                "data": values,
-                "cmd": "compile_cpp_app"
+                "data": result_data,
+                "cmd": "trace_vars"
             })
         else:
             print(f"[{timestamp}] Error getting global variables: {err}", flush=True)
-            await sio.emit("trace_vars", {
+            await sio.emit("messageToKit-kitReply", {
                 "kit_id": client_id,
                 "result": err,
                 "request_from": from_id,
-                "cmd": "compile_cpp_app"
+                "cmd": "trace_vars"
             })
 
 def is_process_running(pid):
