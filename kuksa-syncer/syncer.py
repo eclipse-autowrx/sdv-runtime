@@ -6,11 +6,9 @@
 #
 # SPDX-License-Identifier: MIT
 
-import signal
 import subprocess
 import socketio
 import asyncio
-from subpiper import subpiper
 import time
 import os
 import json
@@ -23,6 +21,8 @@ DEFAULT_RUNTIME_NAME = 'CPP'
 TIME_TO_KEEP_SUBSCRIBER_ALIVE = 60
 TIME_TO_KEEP_RUNNER_ALIVE = 3*60
 
+PERIODIC_GLOBAL_VAR_REPORT = 0.5
+
 
 lsOfRunner = []
 
@@ -33,6 +33,9 @@ sio = socketio.AsyncClient()
 # Kit-Manager connection for C++ compilation
 kit_manager_sio = None
 KIT_MANAGER_URL = 'http://127.0.0.1:3090'
+
+# Track C++ processes by client ID
+cpp_processes = {}  # {from_id: [{"proc": subprocess.Popen, "pid": int, "type": "cpp"}]}
 
 
 def is_process_running_nix(process_name):
@@ -93,6 +96,112 @@ def my_stdout_callback(master_id: str, line: str):
 def my_stderr_callback(master_id: str, line: str):
     asyncio.run(send_app_run_reply(master_id, False, 0, line + '\r\n'))
 
+async def stop_client_processes(from_id):
+    """Stop all processes belonging to a specific client"""
+    if from_id in cpp_processes:
+        print(f"Stopping all processes for client {from_id}", flush=True)
+        
+        for process_info in cpp_processes[from_id]:
+            try:
+                proc = process_info["proc"]
+                pid = process_info["pid"]
+                
+                if proc is not None:
+                    print(f"Terminating process PID {pid} for client {from_id}", flush=True)
+                    proc.terminate()
+                    
+                    # Wait a bit for graceful termination
+                    try:
+                        await asyncio.wait_for(proc.wait(), timeout=5.0)
+                        print(f"Process PID {pid} terminated gracefully", flush=True)
+                    except asyncio.TimeoutExpired:
+                        print(f"Process PID {pid} didn't terminate gracefully, killing it", flush=True)
+                        proc.kill()
+                        
+            except Exception as e:
+                print(f"Error stopping process PID {pid}: {str(e)}", flush=True)
+        
+        # Clear the client's process list
+        del cpp_processes[from_id]
+        print(f"Cleared all processes for client {from_id}", flush=True)
+        return True
+    else:
+        print(f"No processes found for client {from_id}", flush=True)
+        return False
+
+async def capture_app_output(proc, master_id):
+    """Capture stdout and stderr from the C++ app and forward to client"""
+    try:
+        print(f"Starting output capture for process {proc.pid}", flush=True)
+        
+        # Create tasks for both stdout and stderr
+        stdout_task = asyncio.create_task(stream_output(proc.stdout, master_id, "stdout"))
+        stderr_task = asyncio.create_task(stream_output(proc.stderr, master_id, "stderr"))
+        
+        # Monitor the process and wait for it to complete
+        while True:
+            # Check if process is still running
+            if not cpp_debugger_util.is_process_running(proc.pid):
+                print(f"Process {proc.pid} has stopped, ending output capture", flush=True)
+                break
+                
+            # Wait a bit before checking again
+            await asyncio.sleep(0.5)
+        
+        # Cancel any remaining tasks
+        if not stdout_task.done():
+            stdout_task.cancel()
+        if not stderr_task.done():
+            stderr_task.cancel()
+        
+        # Try to get the exit code
+        try:
+            exit_code = proc.returncode if hasattr(proc, 'returncode') else 0
+            await send_reply(master_id, f"Application completed with exit code {exit_code}", is_done=True, retcode=exit_code)
+        except:
+            await send_reply(master_id, "Application completed", is_done=True, retcode=0)
+        
+    except Exception as e:
+        print(f"Error capturing app output: {str(e)}", flush=True)
+        await send_reply(master_id, f"Error capturing output: {str(e)}", is_error=True, retcode=1)
+
+async def stream_output(stream, master_id, stream_type):
+    """Stream output from a process stream to the client"""
+    try:
+        print(f"Starting {stream_type} stream capture", flush=True)
+        line_count = 0
+        
+        while True:
+            if stream is None:
+                print(f"{stream_type} stream is None, stopping", flush=True)
+                break
+                
+            try:
+                line = await asyncio.wait_for(stream.readline(), timeout=1.0)
+                if not line:
+                    print(f"{stream_type} stream closed (no more data)", flush=True)
+                    break
+                    
+                # Decode and send the line to the client
+                output_line = line.decode('utf-8', errors='replace').rstrip('\r\n')
+                if output_line:  # Only send non-empty lines
+                    await send_reply(master_id, f"{output_line}\r\n", is_done=False, retcode=0)
+                    line_count += 1
+                    if line_count % 10 == 0:  # Log every 10 lines
+                        print(f"{stream_type} stream: captured {line_count} lines", flush=True)
+                        
+            except asyncio.TimeoutError:
+                # Timeout is expected, just continue
+                continue
+            except Exception as e:
+                print(f"Error reading from {stream_type} stream: {str(e)}", flush=True)
+                break
+                
+        print(f"{stream_type} stream capture completed after {line_count} lines", flush=True)
+                
+    except Exception as e:
+        print(f"Error in {stream_type} stream capture: {str(e)}", flush=True)
+
 
 @sio.event
 async def connect():
@@ -124,10 +233,10 @@ async def messageToKit(data):
                 cleanup_success = project_utils.empty_app_directory()
                 if cleanup_success:
                     print("✓ App directory cleaned successfully", flush=True)
-                    await send_reply(from_id, "App directory cleaned successfully", is_done=True, retcode=0)
+                    await send_reply(from_id, "App directory cleaned successfully\r\n", is_done=False, retcode=0)
                 else:
                     print("✗ Failed to clean app directory", flush=True)
-                    await send_reply(from_id, "Failed to clean app directory", is_error=True, retcode=1)
+                    await send_reply(from_id, "Failed to clean app directory\r\n", is_error=True, retcode=1)
 
                 # Step 2: Create content in app based on payload data.code
                 await send_reply(from_id, "Creating project content...\r\n", is_done=False, retcode=0)
@@ -137,21 +246,44 @@ async def messageToKit(data):
                 except Exception as e:
                     print(f"✗ Failed to create project content: {str(e)}", flush=True)
                     await send_reply(from_id, f"Failed to create project content: {str(e)}", is_error=True, retcode=1)
+                await send_reply(from_id, "Project content created successfully", is_done=False, retcode=0)
 
                 # Step 3: If C++ app, compile and periodically print out global variables
                 compile_ok, compile_msg = await cpp_debugger_util.compile_cpp()
                 print(f"Compiling project...\r\n{compile_msg}", flush=True)
                 await send_reply(from_id, f"Compiling project...\r\n{compile_msg}\r\n", is_done=False, retcode=0)
                 if not compile_ok:
-                    await send_reply(from_id, "Compilation failed", is_error=True, retcode=1)
+                    await send_reply(from_id, "Compilation failed", is_error=True, is_done=True, retcode=1)
                     return 0
                 print("Run app")
                 proc, pid, run_msg = await cpp_debugger_util.run_binary()
                 await send_reply(from_id, f"Running app...\r\n{run_msg}\r\n", is_done=False, retcode=0)
-                # Get watch_vars from data if present, else use default
-                watch_vars = data.get("watch_vars", "counter, temperature, is_active")
+                
                 if proc is not None and pid is not None:
-                    asyncio.create_task(cpp_debugger_util.periodic_global_var_report(0.5, sio, CLIENT_ID, watch_vars, pid))
+                    # Track this process for this client
+                    if from_id not in cpp_processes:
+                        cpp_processes[from_id] = []
+                    
+                    cpp_processes[from_id].append({
+                        "proc": proc,
+                        "pid": pid,
+                        "type": "cpp",
+                        "start_time": time.time()
+                    })
+                    
+                    print(f"Tracked C++ process PID {pid} for client {from_id}", flush=True)
+                    
+                    # Get watch_vars from data if present, else use default
+                    watch_vars = data.get("watch_vars", "")
+                    # Check if watch_vars is empty or only whitespace after trimming
+                    if watch_vars is not None and watch_vars.strip():
+                        # Start periodic monitoring of global variables
+                        asyncio.create_task(cpp_debugger_util.periodic_global_var_report(
+                            PERIODIC_GLOBAL_VAR_REPORT, sio, CLIENT_ID, watch_vars, pid, from_id
+                        ))
+                    
+                    # Start capturing and forwarding app output
+                    asyncio.create_task(capture_app_output(proc, from_id))
                 else:
                     print("✗ Failed to start binary", flush=True)
 
@@ -162,10 +294,7 @@ async def messageToKit(data):
                 print(f"Error processing project data: {str(e)}", flush=True)
                 await send_reply(from_id, f"Error processing project data: {str(e)}", is_error=True, retcode=1)
 
-    await send_reply(from_id, "Project content created successfully", is_done=True, retcode=0)
-    return 0
-    
-    if data["cmd"] == "run_bin_app":
+    elif data["cmd"] == "run_bin_app":
         # Compile and run C++ app, then start periodic global var reporting
         compile_ok, compile_msg = await cpp_debugger_util.compile_cpp()
         await sio.emit("cpp_debugger_compile_result", {
@@ -175,86 +304,88 @@ async def messageToKit(data):
         })
         if not compile_ok:
             return 0
-        proc, run_msg = await cpp_debugger_util.run_binary()
+        proc, pid, run_msg = await cpp_debugger_util.run_binary()
         await sio.emit("cpp_debugger_run_result", {
             "kit_id": CLIENT_ID,
             "result": run_msg,
             "success": proc is not None
         })
         if proc is not None:
+            # Track this process for this client
+            if from_id not in cpp_processes:
+                cpp_processes[from_id] = []
+            
+            cpp_processes[from_id].append({
+                "proc": proc,
+                "pid": pid,
+                "type": "cpp",
+                "start_time": time.time()
+            })
+            
             # Start periodic reporting in background
-            asyncio.create_task(cpp_debugger_util.periodic_global_var_report(1, sio, CLIENT_ID))
+            asyncio.create_task(cpp_debugger_util.periodic_global_var_report(1, sio, CLIENT_ID, "counter", pid))
         return 0
     
     elif data["cmd"] == "stop_python_app":
-        # print(data["code"])
-        for runner in lsOfRunner:
-            if runner["request_from"] == data["request_from"]:
-                proc = runner["runner"]
-                if proc is not None:
-                    try:
-                        proc.kill()
-                        lsOfRunner.remove(runner)
-                    except Exception as e:
-                        print("Kill proc get error", str(e))
-                        await sio.emit("messageToKit-kitReply", {
-                            "kit_id": CLIENT_ID,
-                            "request_from": data["request_from"],
-                            "cmd": "stop_python_app",
-                            "result": str(e)
-                        })
+        # Stop all processes for this client
+        from_id = data["request_from"]
+        success = await stop_client_processes(from_id)
+        
+        if success:
+            await send_reply(from_id, "All processes stopped successfully\r\n", is_done=True, retcode=0)
+        else:
+            await send_reply(from_id, "No processes found to stop\r\n", is_done=True, retcode=0)
         return 0
+        
+
     
     elif data["cmd"] == "get-runtime-info":
         return 0
-    
-    elif data["cmd"] == "compile_cpp_app":
-        """Handle C++ compilation requests by forwarding to Kit-Manager"""
-        global kit_manager_sio
         
-        try:
-            # Initialize Kit-Manager connection if needed
-            if kit_manager_sio is None:
-                kit_manager_sio = socketio.AsyncClient()
-                
-                # Set up event handlers for Kit-Manager responses
-                @kit_manager_sio.on('compile_cpp_reply')
-                async def on_cpp_reply(msg):
-                    """Forward C++ compilation responses back to web client"""
-                    # Get the original requester from our tracking
-                    if hasattr(kit_manager_sio, 'current_requester'):
-                        await send_cpp_compile_reply(
-                            kit_manager_sio.current_requester,
-                            msg.get("status", ""),
-                            msg.get("result", ""),
-                            msg.get("isDone", False),
-                            msg.get("code", 0),
-                            msg.get("data", "")
-                        )
-                
-                # Connect to Kit-Manager
-                await kit_manager_sio.connect(KIT_MANAGER_URL)
-                print(f"Connected to Kit-Manager at {KIT_MANAGER_URL} for C++ compilation", flush=True)
+    elif data["cmd"] == "stop_cpp_app":
+        """Stop all C++ processes for a specific client"""
+        from_id = data["request_from"]
+        success = await stop_client_processes(from_id)
+        
+        if success:
+            await send_reply(from_id, "All C++ processes stopped successfully", is_done=True, retcode=0)
+        else:
+            await send_reply(from_id, "No C++ processes found to stop", is_done=True, retcode=0)
+        return 0
+    
+    elif data["cmd"] == "set_global_variable":
+        """Set a global variable value remotely in a running C++ process"""
+        from_id = data["request_from"]
+        
+        # Extract variable name and new value from data
+        var_name = data.get("var_name")
+        new_value = data.get("new_value")
+        
+        if not var_name or new_value is None:
+            await send_reply(from_id, "Missing var_name or new_value", is_error=True, retcode=1)
+            return 0
+        
+        # Find the client's running processes
+        if from_id in cpp_processes and cpp_processes[from_id]:
+            # Use the first running process (or iterate through all)
+            process_info = cpp_processes[from_id][0]
+            pid = process_info["pid"]
             
-            # Track the requester
-            kit_manager_sio.current_requester = data["request_from"]
+            print(f"Setting variable {var_name} = {new_value} for client {from_id} (PID: {pid})", flush=True)
             
-            # Forward the compilation request to Kit-Manager
-            await kit_manager_sio.emit('compile_cpp', {
-                'files': data["data"]["files"],
-                'app_name': data["data"]["app_name"],
-                'run': data["data"].get("run", False)
-            })
+            # Set the variable
+            success, message = await cpp_debugger_util.set_global_variable(var_name, new_value, pid)
             
-        except Exception as e:
-            print(f"Error connecting to Kit-Manager: {str(e)}", flush=True)
-            await send_cpp_compile_reply(
-                data["request_from"],
-                "err: connection",
-                f"Failed to connect to Kit-Manager: {str(e)}\r\n",
-                True,
-                1
-            )
+            if success:
+                await send_reply(from_id, f"Variable {var_name} set to {new_value}\r\n", is_done=False, retcode=0)
+                print(f"Successfully set {var_name} = {new_value} for client {from_id}", flush=True)
+            else:
+                await send_reply(from_id, f"Failed to set variable: {message}\r\n", is_error=True, retcode=1)
+                print(f"Failed to set {var_name} = {new_value} for client {from_id}: {message}", flush=True)
+        else:
+            await send_reply(from_id, "No running C++ processes found\r\n", is_error=True, retcode=1)
+            print(f"No running processes found for client {from_id}", flush=True)
+        
         return 0
     
     return 1
@@ -298,6 +429,8 @@ async def ticker_fast():
 async def ticker():
     while True:
         await asyncio.sleep(1)
+        
+
 
 '''
     5 second ticker: 5 seconds sleep

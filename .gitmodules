@@ -1,6 +1,0 @@
-[submodule "vehicle_signal_specification"]
-	path = vehicle_signal_specification
-	url = https://github.com/COVESA/vehicle_signal_specification.git
-[submodule "vehicle-model-generator"]
-	path = vehicle-model-generator
-	url = https://github.com/eclipse-velocitas/vehicle-model-generator.git
