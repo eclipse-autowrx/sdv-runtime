@@ -356,7 +356,7 @@ async def messageToKit(data):
         """Set global variable values remotely in a running C++ process"""
         from_id = data["request_from"]
 
-        f'''
+        '''
         Sample data["data"]: {
             "counter": 10,
             "foo": 1.23,

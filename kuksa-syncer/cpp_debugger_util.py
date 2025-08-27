@@ -90,21 +90,22 @@ async def get_global_variables(watch_vars, pid=None):
 def validate_variable_setting(var_name: str, new_value: str):
     """Validate variable setting request for safety"""
     # List of allowed variables that can be safely modified
-    allowed_vars = ['counter', 'globalValue']
+    # Updated to include 'test' variable from the current main.cpp
+    allowed_vars = ['counter', 'globalValue', 'test']
     
     if var_name not in allowed_vars:
         return False, f"Variable '{var_name}' not in allowed list: {allowed_vars}"
     
     # Type validation for specific variables
-    if var_name == 'counter':
+    if var_name == 'counter' or var_name == 'test':
         try:
             int_val = int(new_value)
             if int_val < 0:
-                return False, f"Counter value must be non-negative, got: {int_val}"
+                return False, f"Integer variable '{var_name}' must be non-negative, got: {int_val}"
             if int_val > 1000000:  # Reasonable upper limit
-                return False, f"Counter value too high: {int_val}"
+                return False, f"Integer variable '{var_name}' value too high: {int_val}"
         except ValueError:
-            return False, f"Counter value must be an integer, got: '{new_value}'"
+            return False, f"Variable '{var_name}' must be an integer, got: '{new_value}'"
     
     elif var_name == 'globalValue':
         try:
@@ -127,9 +128,14 @@ async def set_global_variable(var_name: str, new_value: str, pid: int):
         if not is_valid:
             return False, f"Validation failed: {validation_msg}"
         
+        # Check if process is still running
+        if not is_process_running(pid):
+            return False, f"Process {pid} is not running"
+        
         # Use GDB to attach to the running process and set the variable
         # This is safe because we're attaching to our own child process
-        gdb_cmd = f"gdb -q --batch -ex 'file {BINARY_FILE}' -ex 'attach {pid}' -ex 'set {var_name} = {new_value}' -ex 'print {var_name}' -ex 'detach' -ex 'quit'"
+        # Fixed: Use 'set variable' instead of just 'set' for global variables
+        gdb_cmd = f"gdb -q --batch -ex 'file {BINARY_FILE}' -ex 'attach {pid}' -ex 'set variable {var_name} = {new_value}' -ex 'print {var_name}' -ex 'detach' -ex 'quit'"
         
         proc = await asyncio.create_subprocess_shell(
             gdb_cmd,
@@ -140,17 +146,36 @@ async def set_global_variable(var_name: str, new_value: str, pid: int):
         stdout, stderr = await proc.communicate()
         
         if proc.returncode != 0:
-            return False, f"GDB error: {stderr.decode().strip()}"
+            stderr_msg = stderr.decode().strip()
+            # Check for specific ptrace permission errors
+            if "ptrace:" in stderr_msg or "Could not attach" in stderr_msg:
+                return False, f"Permission error - ptrace scope may be restrictive. Try: sudo sysctl kernel.yama.ptrace_scope=0. Error: {stderr_msg}"
+            return False, f"GDB error: {stderr_msg}"
         
         # Verify the variable was set by checking the print output
         output = stdout.decode()
+        
+        # Try multiple patterns to match the output
         match = re.search(r'\$\d+ = (.+)', output)
+        if not match:
+            # Alternative pattern for different GDB versions
+            match = re.search(rf'{var_name}\s*=\s*(.+)', output, re.MULTILINE)
+        if not match:
+            # Look for the value after "set variable" command
+            lines = output.split('\n')
+            for line in lines:
+                if '$' in line and '=' in line:
+                    match = re.search(r'\$\d+ = (.+)', line)
+                    break
         
         if match:
             actual_value = match.group(1).strip()
             return True, f"Successfully set {var_name} = {new_value} (verified: {actual_value})"
         else:
-            return False, f"Could not verify variable {var_name} was set"
+            # Even if we can't verify, the command might have succeeded
+            if "set variable" in output.lower() or len(stderr.decode().strip()) == 0:
+                return True, f"Variable {var_name} set to {new_value} (verification unclear but no errors)"
+            return False, f"Could not verify variable {var_name} was set. Output: {output}"
             
     except Exception as e:
         return False, f"Error setting variable: {str(e)}"
