@@ -1,3 +1,6 @@
+# Ignore all files and subdirectories in app/, but keep the app/ directory itself
+app/*
+!app/.gitkeep
 nohup.out
 
 *.pyc

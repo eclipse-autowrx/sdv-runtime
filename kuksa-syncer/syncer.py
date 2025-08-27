@@ -15,6 +15,7 @@ import time
 import os
 import json
 from project_utils import ProjectUtils
+import cpp_debugger_util
 
 DEFAULT_KIT_SERVER = 'https://kit.digitalauto.tech'
 DEFAULT_RUNTIME_NAME = 'CPP'
@@ -102,51 +103,87 @@ async def connect():
     })
 @sio.event
 async def messageToKit(data):
-    print("SYNCER: Command received from server",flush=True)
-    print(data,flush=True)
+    # print("SYNCER: Command received from server",flush=True)
+    # print(data,flush=True)
     from_id = data["request_from"]
-    if data["cmd"] == "run_python_app":
+    if data["cmd"] == "run_python_app" or data["cmd"] == "run_cpp_app" or data["cmd"] == "run_app":
         # Check if data.code exists and is valid JSON
         if "data" in data and "code" in data["data"]:
             try:
                 # Validate JSON format
                 code_data = data["data"]["code"]
                 json.loads(code_data)  # This will raise an error if invalid JSON
-                
+
                 print(f"Valid JSON code received, processing project data...", flush=True)
-                
+
                 # Initialize ProjectUtils
                 project_utils = ProjectUtils()
-                
+
                 # Step 1: Clean up app directory
                 print("Step 1: Cleaning up app directory...", flush=True)
                 cleanup_success = project_utils.empty_app_directory()
                 if cleanup_success:
                     print("✓ App directory cleaned successfully", flush=True)
-                    send_reply(from_id, "App directory cleaned successfully", is_done=True, retcode=0)
+                    await send_reply(from_id, "App directory cleaned successfully", is_done=True, retcode=0)
                 else:
                     print("✗ Failed to clean app directory", flush=True)
-                    send_reply(from_id, "Failed to clean app directory", is_error=True, retcode=1)
-                
+                    await send_reply(from_id, "Failed to clean app directory", is_error=True, retcode=1)
+
                 # Step 2: Create content in app based on payload data.code
-                send_reply(from_id, "Creating project content...", is_done=False, retcode=0)
+                await send_reply(from_id, "Creating project content...\r\n", is_done=False, retcode=0)
                 try:
                     app_path = project_utils.save_from_payload(data)
                     print(f"✓ Project content created successfully", flush=True)
-                    
                 except Exception as e:
                     print(f"✗ Failed to create project content: {str(e)}", flush=True)
-                    send_reply(from_id, f"Failed to create project content: {str(e)}", is_error=True, retcode=1)
-                    
+                    await send_reply(from_id, f"Failed to create project content: {str(e)}", is_error=True, retcode=1)
+
+                # Step 3: If C++ app, compile and periodically print out global variables
+                compile_ok, compile_msg = await cpp_debugger_util.compile_cpp()
+                print(f"Compiling project...\r\n{compile_msg}", flush=True)
+                await send_reply(from_id, f"Compiling project...\r\n{compile_msg}\r\n", is_done=False, retcode=0)
+                if not compile_ok:
+                    await send_reply(from_id, "Compilation failed", is_error=True, retcode=1)
+                    return 0
+                print("Run app")
+                proc, pid, run_msg = await cpp_debugger_util.run_binary()
+                await send_reply(from_id, f"Running app...\r\n{run_msg}\r\n", is_done=False, retcode=0)
+                # Get watch_vars from data if present, else use default
+                watch_vars = data.get("watch_vars", "counter, temperature, is_active")
+                if proc is not None and pid is not None:
+                    asyncio.create_task(cpp_debugger_util.periodic_global_var_report(0.5, sio, CLIENT_ID, watch_vars, pid))
+                else:
+                    print("✗ Failed to start binary", flush=True)
+
             except json.JSONDecodeError as e:
-                send_reply(from_id, f"Invalid JSON in data.code: {str(e)}", is_error=True, retcode=1)
+                print(f"Invalid JSON in data.code: {str(e)}", flush=True)
+                await send_reply(from_id, f"Invalid JSON in data.code: {str(e)}", is_error=True, retcode=1)
             except Exception as e:
-                send_reply(from_id, f"Error processing project data: {str(e)}", is_error=True, retcode=1)
-        
-        send_reply(from_id, "Project content created successfully", is_done=True, retcode=0)
-        return 0
+                print(f"Error processing project data: {str(e)}", flush=True)
+                await send_reply(from_id, f"Error processing project data: {str(e)}", is_error=True, retcode=1)
+
+    await send_reply(from_id, "Project content created successfully", is_done=True, retcode=0)
+    return 0
     
     if data["cmd"] == "run_bin_app":
+        # Compile and run C++ app, then start periodic global var reporting
+        compile_ok, compile_msg = await cpp_debugger_util.compile_cpp()
+        await sio.emit("cpp_debugger_compile_result", {
+            "kit_id": CLIENT_ID,
+            "result": compile_msg,
+            "success": compile_ok
+        })
+        if not compile_ok:
+            return 0
+        proc, run_msg = await cpp_debugger_util.run_binary()
+        await sio.emit("cpp_debugger_run_result", {
+            "kit_id": CLIENT_ID,
+            "result": run_msg,
+            "success": proc is not None
+        })
+        if proc is not None:
+            # Start periodic reporting in background
+            asyncio.create_task(cpp_debugger_util.periodic_global_var_report(1, sio, CLIENT_ID))
         return 0
     
     elif data["cmd"] == "stop_python_app":
