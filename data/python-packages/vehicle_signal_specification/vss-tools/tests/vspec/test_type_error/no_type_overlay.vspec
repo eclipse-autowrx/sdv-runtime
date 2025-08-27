@@ -1,6 +1,0 @@
-# This is intended as an overlay to correct.vspec
-
-A.B:
-  datatype: uint8
-  unit: km
-  description: This description is mandatory!

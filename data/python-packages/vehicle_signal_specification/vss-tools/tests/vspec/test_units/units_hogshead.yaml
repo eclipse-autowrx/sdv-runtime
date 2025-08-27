@@ -1,5 +1,0 @@
-units:
-  hogshead:
-    label: Hogshead
-    description: Volume measure in hogsheads (1 hogshead = 238 liters)
-    domain: volume

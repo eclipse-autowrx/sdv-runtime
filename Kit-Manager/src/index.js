@@ -59,18 +59,6 @@ add_subdirectory(src)
     await fs.promises.writeFile(path.join(dest, 'app', 'CMakeLists.txt'), appCMake);
 }
 
-// setInterval(() => {
-//     console.log(`KITS: ${KITS.size}`)
-//     KITS.forEach((kit, kit_id) => {
-//         console.log(`Kit ${kit_id} is online: ${kit.is_online}`)
-//     })
-
-//     console.log(`CLIENTS: ${CLIENTS.size}`)
-//     CLIENTS.forEach((client, client_id) => {
-//         console.log(`Client ${client_id} is online: ${client.is_online}`)
-//     })
-// }, 3000)
-
 let hasKitStateChange = false
 
 app.use(cors({

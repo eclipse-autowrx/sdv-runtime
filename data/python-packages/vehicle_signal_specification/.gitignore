@@ -1,7 +1,0 @@
-#Ignore IDE
-.idea/
-/codeStyles/codeStyleConfig.xml
-*.id
-
-# Generated files
-vss_rel_*
