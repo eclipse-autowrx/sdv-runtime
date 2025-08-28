@@ -3,23 +3,39 @@ import subprocess
 import asyncio
 import re
 import datetime
+import time
+from pathlib import Path
 
 # This utility uses GDB to attach to running processes for debugging.
 # It attaches to child processes that we control, which is safe and doesn't require
 # special ptrace permissions beyond what's needed for normal process management.
 
-APP_DIR = os.path.join(os.path.dirname(__file__), 'app')
-CPP_FILE = os.path.join(APP_DIR, 'main.cpp')
-BINARY_FILE = os.path.join(APP_DIR, 'main_bin')
+APP_DIR = Path(os.path.dirname(__file__)) / 'app'
+BINARY_FILE = APP_DIR / 'main_bin'
+
+import shm_util
+
+# Shared memory instance
+shm = None
 
 async def compile_cpp():
-    """Compile main.cpp in the app directory."""
-    if not os.path.exists(CPP_FILE):
-        return False, 'main.cpp not found.'
+    """Compile all .cpp files in the app directory."""
+    global shm
+    if not APP_DIR.exists():
+        return False, 'App directory not found.'
+
+    cpp_files = list(APP_DIR.rglob('*.cpp'))
+    if not cpp_files:
+        return False, 'No .cpp files found in the project.'
+
+    # Convert Path objects to strings for the command
+    cpp_file_paths = [str(f) for f in cpp_files]
     
-    # Linux compilation - no -arch flag needed
-    cmd = ['g++', CPP_FILE, '-g', '-O0', '-o', BINARY_FILE]
+    # Linux compilation with real-time library for shared memory
+    cmd = ['g++', '-g', '-O0', '-o', str(BINARY_FILE)] + cpp_file_paths + ['-lrt']
     
+    print(f"Compilation command: {' '.join(cmd)}", flush=True)
+
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         stdout=asyncio.subprocess.PIPE,
@@ -28,6 +44,13 @@ async def compile_cpp():
     stdout, stderr = await proc.communicate()
     if proc.returncode != 0:
         return False, stderr.decode()
+    
+    # Create shared memory after successful compilation
+    shm_util.cleanup_shared_memory() # Clean up any old segment
+    shm = shm_util.create_shared_memory()
+    if shm is None:
+        return False, "Failed to create shared memory."
+        
     return True, 'Compiled successfully.'
 
 async def run_binary():
@@ -46,139 +69,46 @@ async def run_binary():
     return proc, pid, 'Started.'
 
 async def get_global_variables(watch_vars, pid=None):
-    """Use gdb to extract only the specified watch_vars and their values from the running process."""
-    values = {}
+    """Read global variables from shared memory."""
+    global shm
+    if shm is None:
+        return {"error": "Shared memory not initialized"}, "Shared memory not initialized"
     
-    # If no PID provided, we can't monitor a running process
-    if pid is None:
-        for var in [v.strip() for v in watch_vars.split(',') if v.strip()]:
-            values[var] = "No process ID provided for monitoring"
-        return values, None
+    # Write the variable names we are interested in to shared memory
+    shm_util.write_to_shm(shm, watch_vars)
     
-    for var in [v.strip() for v in watch_vars.split(',') if v.strip()]:
-        # Use GDB to attach to the running process and read variables
-        # This is safe because we're attaching to our own child process
-        gdb_cmd = f"gdb -q --batch -ex 'file {BINARY_FILE}' -ex 'attach {pid}' -ex 'print {var}' -ex 'detach' -ex 'quit'"
-        proc_val = await asyncio.create_subprocess_shell(
-            gdb_cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-        out_val, err_val = await proc_val.communicate()
-        
-        if proc_val.returncode != 0:
-            values[var] = f"Error: {err_val.decode().strip()}"
-            continue
-        
-        # Try to match the output - GDB might output in different formats
-        output = out_val.decode()
-        match = re.search(r'\$\d+ = (.+)', output)
-        if not match:
-            # Try alternative pattern for global variables
-            match = re.search(rf'{var}\s*=\s*(.+)', output)
-        if not match:
-            # Try to find any number in the output
-            match = re.search(r'(\d+)', output)
-            
-        if match:
-            values[var] = match.group(1).strip()
-        else:
-            values[var] = "N/A"
-    
+    # Read the values back immediately - no delay needed with shared memory!
+    values = shm_util.read_from_shm(shm)
     return values, None
 
 def validate_variable_setting(var_name: str, new_value: str):
     """Validate variable setting request for safety"""
-    # List of allowed variables that can be safely modified
-    # Updated to include 'test' variable from the current main.cpp
-    allowed_vars = ['counter', 'globalValue', 'test']
-    
-    if var_name not in allowed_vars:
-        return False, f"Variable '{var_name}' not in allowed list: {allowed_vars}"
-    
-    # Type validation for specific variables
-    if var_name == 'counter' or var_name == 'test':
-        try:
-            int_val = int(new_value)
-            if int_val < 0:
-                return False, f"Integer variable '{var_name}' must be non-negative, got: {int_val}"
-            if int_val > 1000000:  # Reasonable upper limit
-                return False, f"Integer variable '{var_name}' value too high: {int_val}"
-        except ValueError:
-            return False, f"Variable '{var_name}' must be an integer, got: '{new_value}'"
-    
-    elif var_name == 'globalValue':
-        try:
-            float_val = float(new_value)
-            if float_val < -1000000 or float_val > 1000000:
-                return False, f"Global value out of reasonable range: {float_val}"
-        except ValueError:
-            return False, f"Global value must be a number, got: '{new_value}'"
+    # For shared memory, we can be more flexible, but let's keep some basic validation.
+    try:
+        # Check if it can be converted to a number, but allow strings too.
+        float(new_value)
+    except ValueError:
+        # It's a string, let's limit its length
+        if len(new_value) > 50:
+            return False, "String value is too long."
     
     return True, "Valid"
 
 async def set_global_variable(var_name: str, new_value: str, pid: int):
-    """Set a global variable value in a running C++ process using GDB"""
-    try:
-        if pid is None:
-            return False, "No process ID provided for setting variable"
+    """Set a global variable value in a running C++ process using shared memory."""
+    global shm
+    if shm is None:
+        return False, "Shared memory not initialized"
         
-        # Validate the variable setting request
-        is_valid, validation_msg = validate_variable_setting(var_name, new_value)
-        if not is_valid:
-            return False, f"Validation failed: {validation_msg}"
+    is_valid, validation_msg = validate_variable_setting(var_name, new_value)
+    if not is_valid:
+        return False, f"Validation failed: {validation_msg}"
         
-        # Check if process is still running
-        if not is_process_running(pid):
-            return False, f"Process {pid} is not running"
+    if not is_process_running(pid):
+        return False, f"Process {pid} is not running"
         
-        # Use GDB to attach to the running process and set the variable
-        # This is safe because we're attaching to our own child process
-        # Fixed: Use 'set variable' instead of just 'set' for global variables
-        gdb_cmd = f"gdb -q --batch -ex 'file {BINARY_FILE}' -ex 'attach {pid}' -ex 'set variable {var_name} = {new_value}' -ex 'print {var_name}' -ex 'detach' -ex 'quit'"
-        
-        proc = await asyncio.create_subprocess_shell(
-            gdb_cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-        
-        stdout, stderr = await proc.communicate()
-        
-        if proc.returncode != 0:
-            stderr_msg = stderr.decode().strip()
-            # Check for specific ptrace permission errors
-            if "ptrace:" in stderr_msg or "Could not attach" in stderr_msg:
-                return False, f"Permission error - ptrace scope may be restrictive. Try: sudo sysctl kernel.yama.ptrace_scope=0. Error: {stderr_msg}"
-            return False, f"GDB error: {stderr_msg}"
-        
-        # Verify the variable was set by checking the print output
-        output = stdout.decode()
-        
-        # Try multiple patterns to match the output
-        match = re.search(r'\$\d+ = (.+)', output)
-        if not match:
-            # Alternative pattern for different GDB versions
-            match = re.search(rf'{var_name}\s*=\s*(.+)', output, re.MULTILINE)
-        if not match:
-            # Look for the value after "set variable" command
-            lines = output.split('\n')
-            for line in lines:
-                if '$' in line and '=' in line:
-                    match = re.search(r'\$\d+ = (.+)', line)
-                    break
-        
-        if match:
-            actual_value = match.group(1).strip()
-            return True, f"Successfully set {var_name} = {new_value} (verified: {actual_value})"
-        else:
-            # Even if we can't verify, the command might have succeeded
-            if "set variable" in output.lower() or len(stderr.decode().strip()) == 0:
-                return True, f"Variable {var_name} set to {new_value} (verification unclear but no errors)"
-            return False, f"Could not verify variable {var_name} was set. Output: {output}"
-            
-    except Exception as e:
-        return False, f"Error setting variable: {str(e)}"
+    success, message = shm_util.set_variable_in_shm(shm, var_name, new_value)
+    return success, message
 
 async def periodic_global_var_report(interval, sio, client_id, watch_vars, pid, from_id):
     """Periodically send global variable values to the client via sio.emit, from the running process."""
@@ -195,39 +125,30 @@ async def periodic_global_var_report(interval, sio, client_id, watch_vars, pid, 
             print(f"Process {pid} is no longer running, stopping global variable monitoring", flush=True)
             break
             
+        # Measure timing for shared memory variable read performance
+        start_time = time.time()
         values, err = await get_global_variables(watch_vars, pid)
+        end_time = time.time()
+        read_time_ms = (end_time - start_time) * 1000  # Convert to milliseconds
+        
         timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         if values is not None:
-            print(f"[{timestamp}] Global variables: {values}", flush=True)
-            # INSERT_YOUR_CODE
-            # If values is a string (from get_global_variables), try to parse it into a dict of {var_name: value}
-            # If it's already a dict, use as is.
-            # Otherwise, fallback to sending as-is.
-            result_data = {}
-            if isinstance(values, dict):
-                result_data = values
-            elif isinstance(values, str):
-                # Try to parse lines like "counter = 42\nfoo = 1.23"
-                for line in values.strip().splitlines():
-                    if '=' in line:
-                        k, v = line.split('=', 1)
-                        result_data[k.strip()] = v.strip()
-            else:
-                # fallback
-                result_data = {"value": values}
+            print(f"[{timestamp}] Global variables: {values} (read time: {read_time_ms:.2f}ms)", flush=True)
             await sio.emit("messageToKit-kitReply", {
                 "kit_id": client_id,
                 "request_from": from_id,
-                "data": result_data,
-                "cmd": "trace_vars"
+                "data": values,
+                "cmd": "trace_vars",
+                "read_time_ms": round(read_time_ms, 2)  # Include timing in response
             })
         else:
-            print(f"[{timestamp}] Error getting global variables: {err}", flush=True)
+            print(f"[{timestamp}] Error getting global variables: {err} (read time: {read_time_ms:.2f}ms)", flush=True)
             await sio.emit("messageToKit-kitReply", {
                 "kit_id": client_id,
                 "result": err,
                 "request_from": from_id,
-                "cmd": "trace_vars"
+                "cmd": "trace_vars",
+                "read_time_ms": round(read_time_ms, 2)  # Include timing even for errors
             })
 
 def is_process_running(pid):
@@ -242,3 +163,11 @@ def is_process_running(pid):
             return True
         except OSError:
             return False
+
+def cleanup_shm():
+    """Cleanup shared memory."""
+    global shm
+    if shm is not None:
+        shm.close()
+        shm = None
+    shm_util.cleanup_shared_memory()

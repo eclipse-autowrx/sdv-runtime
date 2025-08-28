@@ -1,0 +1,14 @@
+{
+  "request_from": "P9oC4qc1JjuZMUzeAaoe",
+  "cmd": "run_cpp_app",
+  "to_kit_id": "RunTime-CPP",
+  "usedAPIs": [
+    "Vehicle.Body.Lights.Beam.Low.IsOn"
+  ],
+  "data": {
+    "language": "cpp",
+    "watch_vars": "test, counter",
+    "code": "[{\"type\":\"folder\",\"name\":\"cpp-project\",\"items\":[{\"type\":\"file\",\"name\":\"main.cpp\",\"content\":\"#include <iostream>\\n#include <chrono>\\n#include <thread>\\n\\n// Global counter variable\\nint counter = 0;\\nint test = 0;\\n\\nint main() {\\n    std::cout << \\\"=== Simple Counter App ===\\\" << std::endl;\\n    \\n    for (int i = 0; i < 100; i++) {\\n        std::cout << \\\"Counter: \\\" << counter << std::endl;\\n        \\n        // Wait for 1 second\\n        std::this_thread::sleep_for(std::chrono::seconds(1));\\n        \\n        // Increase counter by 1\\n        counter++;\\n    }\\n    \\n    return 0;\\n}\"},{\"type\":\"folder\",\"name\":\"libs\",\"items\":[{\"type\":\"file\",\"name\":\"a.hpp\",\"content\":\"// nothing\"},{\"type\":\"file\",\"name\":\"a.txt\",\"content\":\"Note\"}]}]}]",
+    "name": "CPP"
+  }
+}

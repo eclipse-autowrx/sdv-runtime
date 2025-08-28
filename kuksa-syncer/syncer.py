@@ -21,7 +21,7 @@ DEFAULT_RUNTIME_NAME = 'CPP'
 TIME_TO_KEEP_SUBSCRIBER_ALIVE = 60
 TIME_TO_KEEP_RUNNER_ALIVE = 3*60
 
-PERIODIC_GLOBAL_VAR_REPORT = 0.5
+PERIODIC_GLOBAL_VAR_REPORT = 0.2
 
 
 lsOfRunner = []
@@ -124,6 +124,10 @@ async def stop_client_processes(from_id):
         # Clear the client's process list
         del cpp_processes[from_id]
         print(f"Cleared all processes for client {from_id}", flush=True)
+        
+        # Clean up shared memory
+        cpp_debugger_util.cleanup_shm()
+        
         return True
     else:
         print(f"No processes found for client {from_id}", flush=True)
@@ -214,6 +218,13 @@ async def connect():
 async def messageToKit(data):
     # print("SYNCER: Command received from server",flush=True)
     # print(data,flush=True)
+    # Save the incoming data payload to payload.json for later comparison/improvement
+    # try:
+    #     with open("payload.json", "w") as f:
+    #         json.dump(data, f, indent=2)
+    #     print("Saved incoming payload to payload.json", flush=True)
+    # except Exception as e:
+    #     print(f"Failed to save payload.json: {str(e)}", flush=True)
     from_id = data["request_from"]
     if data["cmd"] == "run_python_app" or data["cmd"] == "run_cpp_app" or data["cmd"] == "run_app":
         # Check if data.code exists and is valid JSON
