@@ -133,7 +133,7 @@ async def periodic_global_var_report(interval, sio, client_id, watch_vars, pid, 
         
         timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         if values is not None:
-            print(f"[{timestamp}] Global variables: {values} (read time: {read_time_ms:.2f}ms)", flush=True)
+            # print(f"[{timestamp}] Global variables: {values} (read time: {read_time_ms:.2f}ms)", flush=True)
             await sio.emit("messageToKit-kitReply", {
                 "kit_id": client_id,
                 "request_from": from_id,

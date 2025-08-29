@@ -58,7 +58,7 @@ if success:
     
     # Read global variables (PID required)
     values, error = await get_global_variables("counter,globalValue", pid)
-    print(f"Global variables: {values}")
+    # print(f"Global variables: {values}")
 ```
 
 ### Periodic Monitoring

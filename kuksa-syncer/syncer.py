@@ -21,7 +21,7 @@ DEFAULT_RUNTIME_NAME = 'CPP'
 TIME_TO_KEEP_SUBSCRIBER_ALIVE = 60
 TIME_TO_KEEP_RUNNER_ALIVE = 3*60
 
-PERIODIC_GLOBAL_VAR_REPORT = 0.2
+PERIODIC_GLOBAL_VAR_REPORT = 1
 
 
 lsOfRunner = []
@@ -384,8 +384,8 @@ async def messageToKit(data):
         
         # Find the client's running processes
         if from_id not in cpp_processes or not cpp_processes[from_id]:
-            await send_reply(from_id, "No running C++ processes found\r\n", is_error=True, retcode=1)
-            print(f"No running processes found for client {from_id}", flush=True)
+            # await send_reply(from_id, "No running C++ processes found\r\n", is_error=True, retcode=1)
+            # print(f"No running processes found for client {from_id}", flush=True)
             return 0
         
         # Use the first running process (or iterate through all)
@@ -409,29 +409,29 @@ async def messageToKit(data):
             
             success, message = await cpp_debugger_util.set_global_variable(var_name, new_value, pid)
             
-            if success:
-                results.append(f"✓ {var_name} = {new_value}")
-                success_count += 1
-                print(f"Successfully set {var_name} = {new_value} for client {from_id}", flush=True)
-            else:
-                results.append(f"✗ {var_name}: {message}")
-                print(f"Failed to set {var_name} = {new_value} for client {from_id}: {message}", flush=True)
+            # if success:
+            #     results.append(f"✓ {var_name} = {new_value}")
+            #     success_count += 1
+            #     #print(f"Successfully set {var_name} = {new_value} for client {from_id}", flush=True)
+            # else:
+            #     results.append(f"✗ {var_name}: {message}")
+            #     #print(f"Failed to set {var_name} = {new_value} for client {from_id}: {message}", flush=True)
         
         # Send comprehensive response
-        if total_count == 0:
-            await send_reply(from_id, "No valid variables to set", is_error=True, retcode=1)
-        elif success_count == total_count:
-            # All variables set successfully
-            response_msg = f"All variables set successfully:\n" + "\n".join(results)
-            await send_reply(from_id, response_msg + "\r\n", is_done=False, retcode=0)
-        elif success_count > 0:
-            # Partial success
-            response_msg = f"Partial success ({success_count}/{total_count} variables set):\n" + "\n".join(results)
-            await send_reply(from_id, response_msg + "\r\n", is_done=False, retcode=0)
-        else:
-            # All variables failed
-            response_msg = f"Failed to set any variables:\n" + "\n".join(results)
-            await send_reply(from_id, response_msg + "\r\n", is_error=True, retcode=1)
+        # if total_count == 0:
+        #     await send_reply(from_id, "No valid variables to set", is_error=True, retcode=1)
+        # elif success_count == total_count:
+        #     # All variables set successfully
+        #     #response_msg = f"All variables set successfully:\n" + "\n".join(results)
+        #     await send_reply(from_id, response_msg + "\r\n", is_done=False, retcode=0)
+        # elif success_count > 0:
+        #     # Partial success
+        #     response_msg = f"Partial success ({success_count}/{total_count} variables set):\n" + "\n".join(results)
+        #     await send_reply(from_id, response_msg + "\r\n", is_done=False, retcode=0)
+        # else:
+        #     # All variables failed
+        #     #response_msg = f"Failed to set any variables:\n" + "\n".join(results)
+        #     #await send_reply(from_id, response_msg + "\r\n", is_error=True, retcode=1)
         
         return 0
     

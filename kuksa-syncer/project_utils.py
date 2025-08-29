@@ -168,18 +168,43 @@ class ProjectUtils:
         if '#include "shm_wrapper.h"' not in cpp_code:
             cpp_code = '#include "shm_wrapper.h"\n' + cpp_code
 
-        # First, replace existing variable declarations with atomic versions
+        # First, determine the types for WATCH_VAR macros from the original code
+        var_types = {}
+        for var in watch_vars:
+            # Look for existing variable declarations to determine their types
+            pattern = rf'\b(?:int|float|double|bool)\s+{re.escape(var)}\s*(?:=\s*[^;]+)?\s*;'
+            match = re.search(pattern, cpp_code)
+            if match:
+                original_decl = match.group(0)
+                if 'float' in original_decl:
+                    var_types[var] = "float"
+                elif 'double' in original_decl:
+                    var_types[var] = "double"
+                elif 'bool' in original_decl:
+                    var_types[var] = "bool"
+                else:
+                    var_types[var] = "int"
+            else:
+                var_types[var] = "int"  # default
+
+        # Now replace existing variable declarations with atomic versions
         for var in watch_vars:
             # Look for existing variable declarations and replace them with atomic versions
             # Pattern: int varname = value; or int varname;
-            pattern = rf'\b(?:int|float|double)\s+{re.escape(var)}\s*(?:=\s*[^;]+)?\s*;'
+            pattern = rf'\b(?:int|float|double|bool)\s+{re.escape(var)}\s*(?:=\s*[^;]+)?\s*;'
             match = re.search(pattern, cpp_code)
             if match:
                 # Determine type based on the original declaration or default to int
                 original_decl = match.group(0)
-                if 'float' in original_decl or 'double' in original_decl:
+                if 'float' in original_decl:
+                    var_type = "float"
+                    initial_value = "0.0f"
+                elif 'double' in original_decl:
                     var_type = "double"
                     initial_value = "0.0"
+                elif 'bool' in original_decl:
+                    var_type = "bool"
+                    initial_value = "false"
                 else:
                     var_type = "int" 
                     initial_value = "0"
@@ -198,11 +223,10 @@ class ProjectUtils:
         # Find the opening brace of main function and inject initialization code
         main_body_start = main_func_match.end()
 
-        # Inject initialization and cleanup calls inside main.
+        # Inject initialization and cleanup calls inside main using the pre-determined types
         watch_macros = []
         for var in watch_vars:
-            # Simple type inference for demonstration purposes.
-            var_type = "double" if any(t in var.lower() for t in ["temp", "value"]) else "int"
+            var_type = var_types.get(var, "int")
             watch_macros.append(f'    WATCH_VAR({var}, "{var_type}");')
 
         init_code = f"\n    INIT_SHM();\n" + "\n".join(watch_macros) + "\n"
