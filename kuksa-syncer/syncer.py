@@ -22,6 +22,7 @@ import os
 import sys
 import json
 from json_array_patch import apply_global_patch
+from project_utils import create_project_from_json
 
 # Apply global JSON patch for array serialization
 apply_global_patch()
@@ -30,7 +31,7 @@ from vehicle_model_manager import generate_vehicle_model, revert_vehicle_model
 import pkg_manager
 
 BORKER_IP = '127.0.0.1'
-BROKER_PORT = 55555
+BROKER_PORT = 55556
 
 DEFAULT_KIT_SERVER = 'https://kit.digitalauto.tech'
 DEFAULT_RUNTIME_NAME = 'MyRuntime'
@@ -48,7 +49,7 @@ sio = socketio.AsyncClient()
 
 client = VSSClient(BORKER_IP, BROKER_PORT)
 
-mock_signal_path = "/home/dev/ws/mock/signals.json"
+mock_signal_path = "mock/signals.json"
 
 def is_process_running_nix(process_name):
     """Check if a process with the given name is running on Linux/macOS."""
@@ -84,14 +85,58 @@ async def send_app_deploy_reply(master_id, content, is_finish, cmd="deploy-reque
         "is_finish": is_finish
     })
 
+main_loop = None
+
 def process_done(master_id: str, retcode: int):
-    asyncio.run(send_app_run_reply(master_id, True, retcode, ""))
+    if main_loop:
+        asyncio.run_coroutine_threadsafe(send_app_run_reply(master_id, True, retcode, ""), main_loop)
 
 def my_stdout_callback(master_id: str, line: str):
-    asyncio.run(send_app_run_reply(master_id, False, 0, line + '\r\n'))
+    if main_loop:
+        asyncio.run_coroutine_threadsafe(send_app_run_reply(master_id, False, 0, line + '\r\n'), main_loop)
 
 def my_stderr_callback(master_id: str, line: str):
-    asyncio.run(send_app_run_reply(master_id, False, 0, line + '\r\n'))
+    if main_loop:
+        asyncio.run_coroutine_threadsafe(send_app_run_reply(master_id, False, 0, line + '\r\n'), main_loop)
+
+async def install_dependencies(request_from):
+    """Install dependencies from requirements.txt."""
+    requirements_path = "app/requirements.txt"
+    if not os.path.exists(requirements_path):
+        return True
+
+    await send_app_run_reply(request_from, False, 0, "Installing dependencies from requirements.txt...\r\n")
+
+    # Using asyncio.create_subprocess_exec to run pip
+    process = await asyncio.create_subprocess_exec(
+        'pip', 'install', '-r', requirements_path,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+
+    # Stream stdout
+    async def stream_output(stream, callback):
+        while True:
+            line = await stream.readline()
+            if not line:
+                break
+            callback(request_from, line.decode())
+
+    # Create tasks to stream stdout and stderr
+    stdout_task = asyncio.create_task(stream_output(process.stdout, my_stdout_callback))
+    stderr_task = asyncio.create_task(stream_output(process.stderr, my_stdout_callback))
+
+    # Wait for the process to complete and for the streams to be fully read
+    await asyncio.gather(stdout_task, stderr_task)
+    
+    return_code = await process.wait()
+
+    if return_code != 0:
+        await send_app_run_reply(request_from, False, return_code, "Failed to install dependencies.\r\n")
+        return False
+    else:
+        await send_app_run_reply(request_from, False, 0, "Dependencies installed successfully.\r\n")
+        return True
 
 
 @sio.event
@@ -117,6 +162,44 @@ def wait_for_databroker_ready(max_attempts=10, sleep_time=0.5):
             else:
                 raise
     raise Exception("Databroker failed to become ready after retries.")
+
+async def install_dependencies(request_from):
+    """Install dependencies from requirements.txt."""
+    requirements_path = "app/requirements.txt"
+    if not os.path.exists(requirements_path):
+        return True
+
+    await send_app_run_reply(request_from, False, 0, "Installing dependencies from requirements.txt...\r\n")
+
+    process = await asyncio.create_subprocess_exec(
+        'pip', 'install', '-r', requirements_path,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+
+    async def stream_output(stream, callback):
+        while True:
+            line = await stream.readline()
+            if not line:
+                break
+            # The callbacks use asyncio.run, which is not ideal inside an already running loop.
+            # A better approach would be to pass the loop and use loop.call_soon_threadsafe
+            # or simply await the callback if it were async.
+            # For now, we'll stick to the existing callback structure.
+            callback(request_from, line.decode())
+
+    stdout_task = asyncio.create_task(stream_output(process.stdout, my_stdout_callback))
+    stderr_task = asyncio.create_task(stream_output(process.stderr, my_stdout_callback))
+
+    await asyncio.gather(stdout_task, stderr_task)
+    return_code = await process.wait()
+
+    if return_code != 0:
+        await send_app_run_reply(request_from, False, return_code, "Failed to install dependencies.\r\n")
+        return False
+    else:
+        await send_app_run_reply(request_from, False, 0, "Dependencies installed successfully.\r\n")
+        return True
 
 @sio.event
 async def messageToKit(data):
@@ -154,7 +237,11 @@ async def messageToKit(data):
             }
 
             if isinstance(apis,list) and len(apis)>0:
-                appendMockSignal(apis)
+                try:
+                    appendMockSignal(apis)
+                except Exception as e:
+                    print("Error: ", str(e))
+                    pass
             
             await sio.emit("messageToKit-kitReply", {
                 "kit_id": CLIENT_ID,
@@ -215,7 +302,8 @@ async def messageToKit(data):
         return 0
     
     if data["cmd"] == "reset_signals_value":
-        signal_list = json.load(mock_signal_path)
+        with open(mock_signal_path) as f:
+            signal_list = json.load(f)
         writeSignalsValue(str(signal_list))
         mock_signal = listMockSignal()
         await sio.emit("messageToKit-kitReply", {
@@ -343,21 +431,42 @@ async def messageToKit(data):
         appName = "App name"
         if "name" in data["data"]:
             appName = data["data"]["name"]
-        
-        writeCodeToFile(data["data"]["code"], filename="main.py")
+       
+        code_data = data["data"]["code"]
+        cmd_to_run = 'python -u main.py'
+        is_project = False
+        try:
+            # Try to parse the code as JSON
+            json.loads(code_data)
+            is_project = True
+            create_project_from_json(code_data, base_dir="app")
+            cmd_to_run = 'python -u app/main.py'
+        except json.JSONDecodeError:
+            # Not a JSON, treat as raw code
+            writeCodeToFile(code_data, filename="main.py")
+
+        if is_project:
+            install_success = await install_dependencies(data["request_from"])
+            if not install_success:
+                return 1  # Stop execution if dependencies failed to install
+
         # try:
         usedAPIs = data["usedAPIs"]
         if isinstance(usedAPIs,list) and len(usedAPIs)>0:
-            appendMockSignal(usedAPIs)
+            try:
+                appendMockSignal(usedAPIs)
+            except Exception as e:
+                print("Error: ", str(e))
+                pass
         # except Exception as e:
         #     print("Fail to appendMockSignal for usedAPIs")
         #     print(str(e))
 
         proc = subpiper(
             master_id=data["request_from"],
-            cmd='python -u main.py',
+            cmd=cmd_to_run,
             stdout_callback=my_stdout_callback,
-            stderr_callback=my_stderr_callback,
+            stderr_callback=my_stdout_callback,
             finished_callback=process_done
         )
         lsOfRunner.append({
@@ -383,7 +492,11 @@ async def messageToKit(data):
             try:
                 usedAPIs = data["usedAPIs"]
                 if isinstance(usedAPIs,list) and len(usedAPIs)>0:
-                    appendMockSignal(usedAPIs)
+                    try:
+                        appendMockSignal(usedAPIs)
+                    except Exception as e:
+                        print("Error: ", str(e))
+                        pass
             except Exception as e:
                 print("Fail to appendMockSignal for usedAPIs")
                 print(str(e))
@@ -393,7 +506,7 @@ async def messageToKit(data):
                 master_id=data["request_from"],
                 cmd=f'/home/dev/output/{app_name}',
                 stdout_callback=my_stdout_callback,
-                stderr_callback=my_stderr_callback,
+                stderr_callback=my_stdout_callback,
                 finished_callback=process_done
             )
             lsOfRunner.append({
@@ -486,7 +599,7 @@ def stopMockService():
 def startMockService():
     try:
         print("Starting mock provider...", flush=True)
-        subprocess.Popen(["python", "/home/dev/ws/mock/mockprovider.py"])
+        subprocess.Popen(["python", "/home/dev/ws//home/dev/ws/mock/mockprovider.py"])
         print("mock provider started.", flush=True)
     except Exception as e:
         print(f"Error starting mock provider: {e}", flush=True)
@@ -722,6 +835,8 @@ async def ticker_5s():
             print("Error: ", str(e))
 
 async def main():
+    global main_loop
+    main_loop = asyncio.get_running_loop()
     SERVER = os.getenv('SYNCER_SERVER_URL', DEFAULT_KIT_SERVER) + ""
     global CLIENT_ID
     runtime_prefix = os.getenv('RUNTIME_PREFIX', DEFAULT_RUNTIME_PREFIX)
