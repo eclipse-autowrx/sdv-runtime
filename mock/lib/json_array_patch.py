@@ -27,7 +27,10 @@ class ArrayJSONEncoder(json.JSONEncoder):
         # Handle protobuf array objects
         if hasattr(obj, 'values') and hasattr(obj.values, '__iter__'):
             try:
-                return list(obj.values)
+                values = list(obj.values)
+                # For string arrays, ensure strings are not double-encoded
+                # The values might already be properly formatted strings
+                return values
             except Exception as e:
                 log.debug(f"Failed to convert protobuf array to list: {e}")
         
@@ -48,7 +51,7 @@ class ArrayJSONEncoder(json.JSONEncoder):
         # Handle protobuf-style objects by examining their string representation
         if hasattr(obj, '__str__'):
             str_repr = str(obj)
-            if 'values:' in str_repr and any(array_type in str(type(obj)).lower() for array_type in ['array', 'uint', 'int']):
+            if 'values:' in str_repr and any(array_type in str(type(obj)).lower() for array_type in ['array', 'uint', 'int', 'string']):
                 try:
                     # Parse protobuf-style string representation
                     lines = str_repr.strip().split('\n')
@@ -56,13 +59,17 @@ class ArrayJSONEncoder(json.JSONEncoder):
                     for line in lines:
                         if line.strip().startswith('values:'):
                             val_str = line.split(':', 1)[1].strip()
-                            try:
-                                result.append(int(val_str))
-                            except ValueError:
+                            # Remove surrounding quotes for strings if present
+                            if val_str.startswith('"') and val_str.endswith('"'):
+                                result.append(val_str[1:-1])
+                            else:
                                 try:
-                                    result.append(float(val_str))
+                                    result.append(int(val_str))
                                 except ValueError:
-                                    result.append(val_str)
+                                    try:
+                                        result.append(float(val_str))
+                                    except ValueError:
+                                        result.append(val_str)
                     if result:
                         return result
                 except Exception as e:
