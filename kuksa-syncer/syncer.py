@@ -31,7 +31,7 @@ from vehicle_model_manager import generate_vehicle_model, revert_vehicle_model
 import pkg_manager
 
 BORKER_IP = '127.0.0.1'
-BROKER_PORT = 55556
+BROKER_PORT = 55555
 
 DEFAULT_KIT_SERVER = 'https://kit.digitalauto.tech'
 DEFAULT_RUNTIME_NAME = 'MyRuntime'
