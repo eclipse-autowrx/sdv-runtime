@@ -1,0 +1,150 @@
+# Copyright (c) 2025 Eclipse Foundation.
+# 
+# This program and the accompanying materials are made available under the
+# terms of the MIT License which is available at
+# https://opensource.org/licenses/MIT.
+#
+# SPDX-License-Identifier: MIT
+
+name: Manual - Manage Tags
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: '🎯 What do you want to do with existing tags?'
+        required: true
+        default: 'list-tags'
+        type: choice
+        options:
+        - 'list-tags'
+        - 'promote-to-latest'
+        - 'retag-existing'
+      source_tag:
+        description: '🏷️ Existing tag to work with (e.g. v2.0.0, main) - Required for PROMOTE/RETAG'
+        required: false
+        type: string
+      target_tag:
+        description: '🎯 New tag name (e.g. v2.0.1) - Required for RETAG only'
+        required: false
+        type: string
+
+jobs:
+  manage-tags:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate inputs
+        run: |
+          echo "🔍 Validating inputs for action: ${{ inputs.action }}"
+          case "${{ inputs.action }}" in
+            "retag-existing")
+              if [ -z "${{ inputs.source_tag }}" ] || [ -z "${{ inputs.target_tag }}" ]; then
+                echo "❌ ERROR: For retag operation, you need both:"
+                echo "   - Existing tag to work with (source)"
+                echo "   - New tag name (target)"
+                exit 1
+              fi
+              echo "✅ Retag fields validated: ${{ inputs.source_tag }} → ${{ inputs.target_tag }}"
+              ;;
+            "promote-to-latest")
+              if [ -z "${{ inputs.source_tag }}" ]; then
+                echo "❌ ERROR: Please specify which tag to promote to latest"
+                echo "   Example: v2.1.0 or main"
+                exit 1
+              fi
+              echo "✅ Promote field validated: ${{ inputs.source_tag }} → latest"
+              ;;
+            "list-tags")
+              echo "✅ No input validation needed for listing"
+              ;;
+          esac
+          echo "🚀 Ready to proceed with ${{ inputs.action }}"
+
+      - name: List existing tags
+        if: inputs.action == 'list-tags'
+        run: |
+          echo "### 📋 Git Tags (Latest 20):"
+          git tag -l | sort -V | tail -20
+          echo ""
+          echo "### 🐳 Container Images:"
+          echo "Check available images at:"
+          echo "https://github.com/${{ github.repository }}/pkgs/container/sdv-runtime"
+
+      - name: Retag existing container image
+        if: inputs.action == 'retag-existing'
+        run: |
+          echo "🔄 Retagging container from ${{ inputs.source_tag }} to ${{ inputs.target_tag }}"
+          
+          if ! docker pull ghcr.io/${{ github.repository_owner }}/sdv-runtime:${{ inputs.source_tag }}; then
+            echo "❌ ERROR: Source tag ${{ inputs.source_tag }} not found in container registry"
+            echo "Available tags can be checked via 'list-tags' action"
+            exit 1
+          fi
+          
+          docker tag ghcr.io/${{ github.repository_owner }}/sdv-runtime:${{ inputs.source_tag }} \
+                     ghcr.io/${{ github.repository_owner }}/sdv-runtime:${{ inputs.target_tag }}
+          
+          docker push ghcr.io/${{ github.repository_owner }}/sdv-runtime:${{ inputs.target_tag }}
+          
+          echo "✅ Successfully retagged container:"
+          echo "   From: ghcr.io/${{ github.repository_owner }}/sdv-runtime:${{ inputs.source_tag }}"
+          echo "   To:   ghcr.io/${{ github.repository_owner }}/sdv-runtime:${{ inputs.target_tag }}"
+
+      - name: Promote tag to latest
+        if: inputs.action == 'promote-to-latest'
+        run: |
+          echo "⬆️ Promoting ${{ inputs.source_tag }} to latest"
+          
+          if ! docker pull ghcr.io/${{ github.repository_owner }}/sdv-runtime:${{ inputs.source_tag }}; then
+            echo "❌ ERROR: Source tag ${{ inputs.source_tag }} not found in container registry"
+            echo "Available tags can be checked via 'list-tags' action"
+            exit 1
+          fi
+          
+          docker tag ghcr.io/${{ github.repository_owner }}/sdv-runtime:${{ inputs.source_tag }} \
+                     ghcr.io/${{ github.repository_owner }}/sdv-runtime:latest
+          
+          docker push ghcr.io/${{ github.repository_owner }}/sdv-runtime:latest
+          
+          echo "✅ Successfully promoted to latest:"
+          echo "   Source: ghcr.io/${{ github.repository_owner }}/sdv-runtime:${{ inputs.source_tag }}"
+          echo "   Latest: ghcr.io/${{ github.repository_owner }}/sdv-runtime:latest"
+
+      - name: Summary
+        run: |
+          echo "### 🎯 Tag Management Complete!"
+          echo ""
+          echo "**Action Performed:** ${{ inputs.action }}"
+          case "${{ inputs.action }}" in
+            "retag-existing")
+              echo "**Retagged From:** ${{ inputs.source_tag }}"
+              echo "**Retagged To:** ${{ inputs.target_tag }}"
+              ;;
+            "promote-to-latest")
+              echo "**Promoted:** ${{ inputs.source_tag }} → latest"
+              ;;
+            "list-tags")
+              echo "**Action:** Listed existing tags and provided registry link"
+              ;;
+          esac
+          echo ""
+          echo "✅ Operation completed successfully!"
