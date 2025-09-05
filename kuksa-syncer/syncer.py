@@ -49,7 +49,7 @@ sio = socketio.AsyncClient()
 
 client = VSSClient(BORKER_IP, BROKER_PORT)
 
-mock_signal_path = "mock/signals.json"
+mock_signal_path = "/home/dev/ws/mock/signals.json"
 
 def is_process_running_nix(process_name):
     """Check if a process with the given name is running on Linux/macOS."""
@@ -332,15 +332,16 @@ async def messageToKit(data):
             generate_vehicle_model(json.dumps(data["data"]))
             
             time.sleep(0.5)
-            # Check is databroker app running or not
-            if is_process_running_nix("databroker"):
-                print("databroker is running")
-            else:
-                print("databroker is not running")
-                raise Exception("Databroker is not running")
-            
-            # Wait until databroker is fully ready (port is listening)
-            wait_for_databroker_ready()
+            if not os.environ.get('DISABLE_DATABROKER'):
+                # Check is databroker app running or not
+                if is_process_running_nix("databroker"):
+                    print("databroker is running")
+                else:
+                    print("databroker is not running")
+                    raise Exception("Databroker is not running")
+                
+                # Wait until databroker is fully ready (port is listening)
+                wait_for_databroker_ready()
             
             modifyMockSignal([""])
             time.sleep(0.5)
@@ -599,7 +600,7 @@ def stopMockService():
 def startMockService():
     try:
         print("Starting mock provider...", flush=True)
-        subprocess.Popen(["python", "/home/dev/ws//home/dev/ws/mock/mockprovider.py"])
+        subprocess.Popen(["python", "/home/dev/ws/mock/mockprovider.py"])
         print("mock provider started.", flush=True)
     except Exception as e:
         print(f"Error starting mock provider: {e}", flush=True)
