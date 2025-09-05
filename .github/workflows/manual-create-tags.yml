@@ -1,0 +1,161 @@
+# Copyright (c) 2025 Eclipse Foundation.
+# 
+# This program and the accompanying materials are made available under the
+# terms of the MIT License which is available at
+# https://opensource.org/licenses/MIT.
+#
+# SPDX-License-Identifier: MIT
+
+name: Manual - Create Tags
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_type:
+        description: '🎯 What type of tag do you want to create?'
+        required: true
+        default: 'release'
+        type: choice
+        options:
+        - 'release'
+        - 'prerelease'
+      version:
+        description: '📦 Version to create (e.g. v2.1.0 for release, v2.1.0-beta.1 for prerelease)'
+        required: true
+        type: string
+      target_commit:
+        description: '🎯 Specific commit to tag (e.g. abc1234, main) - Leave empty to use latest commit'
+        required: false
+        type: string
+        default: ''
+      release_notes:
+        description: '📝 Release description (optional)'
+        required: false
+        type: string
+
+jobs:
+  create-tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      attestations: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate version format
+        run: |
+          echo "🔍 Validating version format for: ${{ inputs.version }}"
+          if [ "${{ inputs.tag_type }}" = "release" ]; then
+            if ! echo "${{ inputs.version }}" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+              echo "❌ ERROR: Release version must follow semantic versioning"
+              echo "   Example: v2.1.0"
+              exit 1
+            fi
+          else
+            if ! echo "${{ inputs.version }}" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-(alpha|beta|rc)\.[0-9]+$'; then
+              echo "❌ ERROR: Prerelease version must follow prerelease format"
+              echo "   Example: v2.1.0-beta.1, v2.1.0-alpha.1, v2.1.0-rc.1"
+              exit 1
+            fi
+          fi
+          echo "✅ Version format validated: ${{ inputs.version }}"
+
+      - name: Validate target commit
+        run: |
+          if [ -n "${{ inputs.target_commit }}" ]; then
+            echo "🔍 Validating target commit: ${{ inputs.target_commit }}"
+            if ! git rev-parse --verify "${{ inputs.target_commit }}" >/dev/null 2>&1; then
+              echo "❌ ERROR: Commit '${{ inputs.target_commit }}' not found"
+              echo "   Please provide a valid commit hash or branch name"
+              exit 1
+            fi
+            COMMIT_HASH=$(git rev-parse "${{ inputs.target_commit }}")
+            echo "✅ Target commit validated: $COMMIT_HASH"
+            echo "COMMIT_HASH=$COMMIT_HASH" >> $GITHUB_ENV
+          else
+            COMMIT_HASH=$(git rev-parse HEAD)
+            echo "📍 Using latest commit: $COMMIT_HASH"
+            echo "COMMIT_HASH=$COMMIT_HASH" >> $GITHUB_ENV
+          fi
+
+      - name: Check if tag already exists
+        run: |
+          if git tag -l | grep -q "^${{ inputs.version }}$"; then
+            echo "❌ ERROR: Tag ${{ inputs.version }} already exists"
+            echo "Use the 'Manual - Manage Tags' workflow to retag or promote existing versions"
+            exit 1
+          fi
+          echo "✅ Tag ${{ inputs.version }} is available"
+
+      - name: Create and push git tag
+        run: |
+          echo "🏷️ Creating git tag: ${{ inputs.version }}"
+          if [ -n "${{ inputs.target_commit }}" ]; then
+            echo "📍 Tagging commit: ${{ env.COMMIT_HASH }}"
+            git tag -a "${{ inputs.version }}" "${{ env.COMMIT_HASH }}" -m "${{ inputs.tag_type == 'release' && 'Release' || 'Prerelease' }} ${{ inputs.version }}"
+          else
+            echo "📍 Tagging latest commit: ${{ env.COMMIT_HASH }}"
+            git tag -a "${{ inputs.version }}" -m "${{ inputs.tag_type == 'release' && 'Release' || 'Prerelease' }} ${{ inputs.version }}"
+          fi
+          git push origin "${{ inputs.version }}"
+          echo "✅ Created and pushed git tag: ${{ inputs.version }} → ${{ env.COMMIT_HASH }}"
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ inputs.version }}
+          release_name: ${{ inputs.tag_type == 'release' && 'Release' || 'Prerelease' }} ${{ inputs.version }}
+          body: |
+            ${{ inputs.release_notes || 'Automated release created via workflow' }}
+            
+            ## 📦 Container Images
+            
+            - `ghcr.io/${{ github.repository_owner }}/sdv-runtime:${{ inputs.version }}`
+            - Multi-platform support: `linux/amd64`, `linux/arm64`
+            
+            ## 🚀 Usage
+            
+            ```bash
+            docker pull ghcr.io/${{ github.repository_owner }}/sdv-runtime:${{ inputs.version }}
+            ```
+          draft: false
+          prerelease: ${{ inputs.tag_type == 'prerelease' }}
+
+      - name: Summary
+        run: |
+          echo "### ✅ Tag Creation Complete!"
+          echo ""
+          echo "**Tag Created:** ${{ inputs.version }}"
+          echo "**Type:** ${{ inputs.tag_type }}"
+          echo "**Target Commit:** ${{ env.COMMIT_HASH }}"
+          if [ -n "${{ inputs.target_commit }}" ]; then
+            echo "**Commit Source:** ${{ inputs.target_commit }} (specified)"
+          else
+            echo "**Commit Source:** HEAD (latest)"
+          fi
+          echo "**Container Image:** Building automatically via release workflow"
+          echo "**GitHub Release:** Created"
+          echo ""
+          echo "🚀 The release workflow will now build and push the container image automatically."

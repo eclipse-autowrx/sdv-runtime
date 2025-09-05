@@ -1,0 +1,139 @@
+# Copyright (c) 2025 Eclipse Foundation.
+# 
+# This program and the accompanying materials are made available under the
+# terms of the MIT License which is available at
+# https://opensource.org/licenses/MIT.
+#
+# SPDX-License-Identifier: MIT
+
+name: Manual - Remove Tags
+
+on:
+  workflow_dispatch:
+    inputs:
+      remove_type:
+        description: '🗑️ What do you want to remove?'
+        required: true
+        default: 'git-tag-only'
+        type: choice
+        options:
+        - 'git-tag-only'
+        - 'container-image-only'
+        - 'both-git-and-container'
+      tag_to_remove:
+        description: '🎯 Tag to remove (e.g. v2.0.0, v1.0.0-beta.1) - CANNOT remove "latest" or "main"'
+        required: true
+        type: string
+      confirm_removal:
+        description: '⚠️ Type "CONFIRM" to proceed with deletion - THIS CANNOT BE UNDONE'
+        required: true
+        type: string
+
+jobs:
+  remove-tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      attestations: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Log in to GitHub Container Registry
+        if: inputs.remove_type == 'container-image-only' || inputs.remove_type == 'both-git-and-container'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate inputs and safety checks
+        run: |
+          echo "🔍 Validating removal request..."
+          
+          # Check confirmation
+          if [ "${{ inputs.confirm_removal }}" != "CONFIRM" ]; then
+            echo "❌ ERROR: You must type 'CONFIRM' to proceed with deletion"
+            exit 1
+          fi
+          
+          # Prevent removal of protected tags
+          if [ "${{ inputs.tag_to_remove }}" = "latest" ] || [ "${{ inputs.tag_to_remove }}" = "main" ]; then
+            echo "❌ ERROR: Cannot remove protected tags 'latest' or 'main'"
+            exit 1
+          fi
+          
+          # Check if it's a valid tag format
+          if ! echo "${{ inputs.tag_to_remove }}" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$'; then
+            echo "⚠️  WARNING: Tag format doesn't match typical version pattern"
+            echo "   Expected: v1.0.0, v2.1.0-beta.1, etc."
+            echo "   Provided: ${{ inputs.tag_to_remove }}"
+            echo "   Continuing anyway..."
+          fi
+          
+          echo "✅ Validation passed"
+          echo "🎯 Will remove: ${{ inputs.tag_to_remove }}"
+          echo "📋 Remove type: ${{ inputs.remove_type }}"
+
+      - name: Remove git tag
+        if: inputs.remove_type == 'git-tag-only' || inputs.remove_type == 'both-git-and-container'
+        run: |
+          echo "🗑️ Removing git tag: ${{ inputs.tag_to_remove }}"
+          
+          # Check if git tag exists
+          if ! git tag -l | grep -q "^${{ inputs.tag_to_remove }}$"; then
+            echo "⚠️  Git tag ${{ inputs.tag_to_remove }} does not exist"
+          else
+            # Delete local tag
+            git tag -d "${{ inputs.tag_to_remove }}" || echo "Local tag not found"
+            
+            # Delete remote tag
+            git push origin --delete "${{ inputs.tag_to_remove }}" || echo "Remote tag not found"
+            
+            echo "✅ Git tag removed: ${{ inputs.tag_to_remove }}"
+          fi
+
+      - name: Remove container image
+        if: inputs.remove_type == 'container-image-only' || inputs.remove_type == 'both-git-and-container'
+        run: |
+          echo "🗑️ Removing container image: ${{ inputs.tag_to_remove }}"
+          
+          # Note: GitHub Container Registry doesn't support tag deletion via Docker CLI
+          # This would require GitHub API calls with proper authentication
+          echo "⚠️  Container image removal requires GitHub API access"
+          echo "   Please manually delete the container image at:"
+          echo "   https://github.com/${{ github.repository }}/pkgs/container/sdv-runtime"
+          echo "   Navigate to the package → Find tag '${{ inputs.tag_to_remove }}' → Delete"
+          
+          # Alternative: We could implement GitHub API deletion here
+          # but it requires more complex authentication setup
+
+      - name: Summary
+        run: |
+          echo "### 🗑️ Tag Removal Summary"
+          echo ""
+          echo "**Tag Removed:** ${{ inputs.tag_to_remove }}"
+          echo "**Removal Type:** ${{ inputs.remove_type }}"
+          echo ""
+          case "${{ inputs.remove_type }}" in
+            "git-tag-only")
+              echo "✅ Git tag removed from repository"
+              echo "ℹ️  Container image remains in registry"
+              ;;
+            "container-image-only")
+              echo "ℹ️  Git tag remains in repository" 
+              echo "⚠️  Please manually remove container image from GitHub UI"
+              ;;
+            "both-git-and-container")
+              echo "✅ Git tag removed from repository"
+              echo "⚠️  Please manually remove container image from GitHub UI"
+              ;;
+          esac
+          echo ""
+          echo "🔗 Container Registry: https://github.com/${{ github.repository }}/pkgs/container/sdv-runtime"
