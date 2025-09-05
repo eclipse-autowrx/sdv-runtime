@@ -57,10 +57,10 @@ jobs:
           TAG="${SHORT_SHA}-${GIT_TAG}"
           echo "TAG=$TAG" >> $GITHUB_ENV
           echo "TAG=$TAG"  # output for debug
-          echo "::set-output name=TAG::$TAG"  # deprecated but kept for backward compatibility
+          echo "TAG=$TAG" >> $GITHUB_OUTPUT
 
       - name: Build and optionally push multi-arch image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: ${{ steps.docker_login.outcome == 'success' }}

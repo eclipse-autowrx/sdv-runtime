@@ -11,9 +11,7 @@ COPY --chmod=0755 bin/amd64/node-km-x64 /home/dev/ws/kit-manager/node-km
 RUN groupadd -r sdvr && useradd -r -g sdvr dev \
     && chown -R dev:sdvr /app/databroker \
     && chown -R dev:sdvr /home/dev/ && chmod -R u+w /home/dev/ \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends python3 mosquitto \
-    ca-certificates python-is-python3 python3-pip nano git \
+    && for i in 1 2 3; do apt-get update && apt-get install -y --no-install-recommends python3 mosquitto ca-certificates python-is-python3 python3-pip nano git && break || sleep 5; done \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
@@ -26,9 +24,7 @@ COPY --chmod=0755 bin/arm64/node-km-arm64 /home/dev/ws/kit-manager/node-km
 RUN groupadd -r sdvr && useradd -r -g sdvr dev \
     && chown -R dev:sdvr /app/databroker \
     && chown -R dev:sdvr /home/dev/ && chmod -R u+w /home/dev/ \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends python3 mosquitto \
-    ca-certificates python-is-python3 python3-pip nano git \
+    && for i in 1 2 3; do apt-get update && apt-get install -y --no-install-recommends python3 mosquitto ca-certificates python-is-python3 python3-pip nano git && break || sleep 5; done \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* 
 
@@ -37,8 +33,7 @@ FROM ubuntu:22.04 AS python-builder
 ARG TARGETARCH
 
 # Install Python and pip
-RUN apt-get update && apt-get install -y \
-    python3 python3-pip git build-essential \
+RUN for i in 1 2 3; do apt-get update && apt-get install -y python3 python3-pip git build-essential && break || sleep 5; done \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
