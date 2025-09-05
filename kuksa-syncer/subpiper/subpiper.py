@@ -21,7 +21,7 @@ from typing import Iterable, Callable, IO, Union, Any, Optional, List, Tuple
 
 _FILE = Union[None, int, IO[Any]]
 CallbackType = Callable[[str,str], None]
-FinishedCallbackType = Callable[[int], None]
+FinishedCallbackType = Callable[[str, int], None]
 
 __all__ = ["subpiper"]
 

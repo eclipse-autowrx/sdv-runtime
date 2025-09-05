@@ -28,7 +28,7 @@ fi
 
 /home/dev/ws/kit-manager/node-km &
 
-sleep 3 # Ensure that the kuksa databroker and mosquitto start before the syncer
+sleep 4 # Ensure that the kuksa databroker and mosquitto start before the syncer
 
 #python3 /home/dev/ws/kuksa-syncer/syncer.pyc &   
 
