@@ -126,7 +126,10 @@ def generate_vehicle_model(input_str):
 
         
         shutil.move(f"{target_folder}/vehicle", "/home/dev/python-packages/")
-        restart_databroker()
+        
+        # Check if DISABLE_DATABROKER environment variable is set
+        if not os.environ.get('DISABLE_DATABROKER'):
+            restart_databroker()
     
     except Exception as e:
         print(f"..Error occured when generating vehicle model: {e}.", flush=True)
