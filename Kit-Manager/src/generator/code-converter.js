@@ -139,12 +139,14 @@ class CodeConverter {
         let finalCode = (0, helpers_1.createArrayFromMultilineString)(newMainPy);
         this.adaptToMqtt(finalCode);
         const firstLineOfImport = finalCode.find((element) => element.includes(codeConstants_1.PYTHON.IMPORT));
-        finalCode.splice(finalCode.indexOf(firstLineOfImport), 0, '# flake8: noqa: E501,B950 line too long');
-        (_a = this.codeContext.basicImportsArray) === null || _a === void 0 ? void 0 : _a.forEach((basicImportString) => {
-            if (basicImportString != codeConstants_1.DIGITAL_AUTO.IMPORT_PLUGINS) {
-                finalCode.splice(finalCode.indexOf(firstLineOfImport), 0, basicImportString);
-            }
-        });
+        if (firstLineOfImport != null) {
+            finalCode.splice(finalCode.indexOf(firstLineOfImport), 0, '# flake8: noqa: E501,B950 line too long');
+            (_a = this.codeContext.basicImportsArray) === null || _a === void 0 ? void 0 : _a.forEach((basicImportString) => {
+                if (basicImportString != codeConstants_1.DIGITAL_AUTO.IMPORT_PLUGINS) {
+                    finalCode.splice(finalCode.indexOf(firstLineOfImport), 0, basicImportString);
+                }
+            });
+        }
         finalCode = (0, helpers_1.createMultilineStringFromArray)(finalCode);
         finalCode = finalCode
             .replace(regex_1.REGEX.FIND_SUBSCRIBE_METHOD_CALL, codeConstants_1.VELOCITAS.SUBSCRIPTION_SIGNATURE)
@@ -182,14 +184,31 @@ class CodeConverter {
         for (const setTextLine of setTextLines) {
             let mqttTopic;
             if (setTextLine.includes(codeConstants_1.DIGITAL_AUTO.NOTIFY)) {
-                mqttTopic = setTextLine.split('.')[1].split('(')[0].trim();
+                const dotSegment = setTextLine.split('.')[1];
+                if (dotSegment == null) {
+                    continue;
+                }
+                const parenSegment = dotSegment.split('(')[0];
+                if (parenSegment == null) {
+                    continue;
+                }
+                mqttTopic = parenSegment.trim();
             }
             else {
-                mqttTopic = setTextLine.split('.')[0].trim();
+                const dotSegment = setTextLine.split('.')[0];
+                if (dotSegment == null) {
+                    continue;
+                }
+                mqttTopic = dotSegment.trim();
             }
-            const mqttMessage = setTextLine.split('"')[1].trim();
+            const quoteParts = setTextLine.split('"');
+            if (quoteParts.length < 2 || quoteParts[1] == null) {
+                continue;
+            }
+            const mqttMessage = quoteParts[1].trim();
             const mqttPublishLine = this.transformToMqttPublish(mqttTopic, mqttMessage);
-            const spacesBeforeSetTextLine = new RegExp(`\\s(?=[^,]*${mqttTopic})`, 'g');
+            const safeMqttTopic = (0, helpers_1.escapeRegex)(mqttTopic);
+            const spacesBeforeSetTextLine = new RegExp(`\\s(?=[^,]*${safeMqttTopic})`, 'g');
             const spaceCountBeforeSetTextLine = setTextLine.length - setTextLine.replace(spacesBeforeSetTextLine, '').length;
             const newMqttPublishLine = (0, helpers_1.indentCodeSnippet)(mqttPublishLine, spaceCountBeforeSetTextLine);
             mainPyStringArray[mainPyStringArray.indexOf(setTextLine)] = newMqttPublishLine;

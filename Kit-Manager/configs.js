@@ -7,7 +7,7 @@
 // SPDX-License-Identifier: MIT
 
 const config = {
-    port: 3090
+    port: parseInt(process.env.KIT_MANAGER_PORT, 10) || 3090
 }
 
 module.exports = config;

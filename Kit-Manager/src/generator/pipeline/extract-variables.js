@@ -31,7 +31,12 @@ class ExtractVariablesStep extends pipeline_base_1.PipelineStep {
             if (!stringElement.includes('plugins')) {
                 const tempVariables = [];
                 if (stringElement.includes('= {')) {
-                    for (let index = codeSnippetStringArray.indexOf(stringElement); codeSnippetStringArray[index] !== '' && !codeSnippetStringArray[index].includes('}}'); index++) {
+                    for (let index = codeSnippetStringArray.indexOf(stringElement);
+                         index < codeSnippetStringArray.length
+                         && codeSnippetStringArray[index] != null
+                         && codeSnippetStringArray[index] !== ''
+                         && !codeSnippetStringArray[index].includes('}}');
+                         index++) {
                         tempVariables.push(codeSnippetStringArray[index]);
                     }
                     variablesArray.push(tempVariables);

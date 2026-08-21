@@ -251,21 +251,21 @@ class ProjectGenerator {
     }
     getNewAppManifestSha(appName, vspecPath, dataPoints) {
         return __awaiter(this, void 0, void 0, function* () {
-            const appManifestContentData = yield this.gitRequestHandler.getFileContentData(constants_1.APP_MANIFEST_PATH);
-            let decodedAppManifestContent = JSON.parse((0, helpers_1.decode)(appManifestContentData));
-            decodedAppManifestContent[0].name = appName.toLowerCase();
-            decodedAppManifestContent[0].vehicleModel.src = vspecPath;
-            decodedAppManifestContent[0].vehicleModel.datapoints = dataPoints;
-            const encodedAppManifestContent = (0, helpers_1.encode)(`${JSON.stringify(decodedAppManifestContent, null, 4)}\n`);
-            // const appManifestBlobSha = yield this.gitRequestHandler.createBlob(encodedAppManifestContent);
-            return appManifestBlobSha;
+            // Defensive: this method's GitHub blob creation is commented out, so the
+            // original code referenced an undeclared `appManifestBlobSha` and would
+            // throw ReferenceError if ever invoked. Fail fast with a clear message
+            // so re-enabling the GitHub flow surfaces an obvious error instead of
+            // a confusing runtime crash.
+            void appName; void vspecPath; void dataPoints;
+            throw new Error('getNewAppManifestSha: not implemented (blob creation is commented out)');
         });
     }
     getNewMainPySha(finalizedMainPy) {
         return __awaiter(this, void 0, void 0, function* () {
-            const encodedFinalizedMainPy = (0, helpers_1.encode)(`${finalizedMainPy}\n`);
-            // const mainPyBlobSha = yield this.gitRequestHandler.createBlob(encodedFinalizedMainPy);
-            return mainPyBlobSha;
+            // Defensive: see getNewAppManifestSha. The original referenced
+            // an undeclared `mainPyBlobSha`. Fail fast with a clear message.
+            void finalizedMainPy;
+            throw new Error('getNewMainPySha: not implemented (blob creation is commented out)');
         });
     }
 }
