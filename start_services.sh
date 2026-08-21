@@ -26,7 +26,7 @@ if [ -z "$DISABLE_DATABROKER" ]; then
     /app/databroker $DATABROKER_ARGS & 
 fi
 
-/home/dev/ws/kit-manager/node-km &
+node /home/dev/ws/kit-manager/src/index.js &
 
 sleep 4 # Ensure that the kuksa databroker and mosquitto start before the syncer
 
