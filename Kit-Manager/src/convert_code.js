@@ -29,7 +29,12 @@ const encodeToBase64 = (code) => {
     return Buffer.from(code).toString("base64")
 }
 
+let inFlightConverts = 0
+
+const getInFlightConverts = () => inFlightConverts
+
 const convertPgCode = async (appName, code, vss_payload) => {
+    inFlightConverts += 1
     try {
         // console.log(`appName`)
         // console.log(appName)
@@ -59,7 +64,10 @@ const convertPgCode = async (appName, code, vss_payload) => {
     } catch (error) {
         console.log("error on generateCode", error)
         throw error;
+    } finally {
+        inFlightConverts = Math.max(0, inFlightConverts - 1)
     }
 }
 
+convertPgCode.getInFlightConverts = getInFlightConverts
 module.exports = convertPgCode;
