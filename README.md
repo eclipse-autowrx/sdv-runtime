@@ -20,11 +20,13 @@ When you run this Docker container, all the tools mentioned above will be ready 
 
 # How to run a runtime
 
+The container is **fail-fast on Kit-Manager**: if Kit-Manager exits, `start_services.sh` shuts down sibling processes (databroker, syncer, mock provider) and the container exits with Kit-Manager's exit code. Prefer `--restart=always` (or `unless-stopped`) so a crash brings the kit back up instead of leaving it permanently stopped.
+
 ```
-docker run -d -e RUNTIME_NAME="MyRuntimeName" ghcr.io/eclipse-autowrx/sdv-runtime:latest
+docker run -d --restart=always -e RUNTIME_NAME="MyRuntimeName" ghcr.io/eclipse-autowrx/sdv-runtime:latest
 
 # With custom prefix
-docker run -d -e RUNTIME_PREFIX="Kit-" -e RUNTIME_NAME="MyRuntimeName" ghcr.io/eclipse-autowrx/sdv-runtime:latest
+docker run -d --restart=always -e RUNTIME_PREFIX="Kit-" -e RUNTIME_NAME="MyRuntimeName" ghcr.io/eclipse-autowrx/sdv-runtime:latest
 ```
 
 Video instruction: [https://youtu.be/HQrsGY7XLU4](https://youtu.be/HQrsGY7XLU4)
@@ -37,7 +39,7 @@ Video instruction: [https://youtu.be/HQrsGY7XLU4](https://youtu.be/HQrsGY7XLU4)
 To use `kuksa-client` to interact with the data broker from outside the container, add port forwarding to the run command like this:
 
 ```
-docker run -d -e RUNTIME_NAME="MyRuntimeName" -p 55555:55555 ghcr.io/eclipse-autowrx/sdv-runtime:latest
+docker run -d --restart=always -e RUNTIME_NAME="MyRuntimeName" -p 55555:55555 ghcr.io/eclipse-autowrx/sdv-runtime:latest
 ```
 
 
@@ -46,12 +48,12 @@ docker run -d -e RUNTIME_NAME="MyRuntimeName" -p 55555:55555 ghcr.io/eclipse-aut
 Default value is https://kit.digitalauto.tech. Your can change it to another runtime manager server
 
 ```
-docker run -d -e RUNTIME_NAME="MyRuntimeName" -e SYNCER_SERVER_URL="YOUR_SERVER" ghcr.io/eclipse-autowrx/sdv-runtime:latest
+docker run -d --restart=always -e RUNTIME_NAME="MyRuntimeName" -e SYNCER_SERVER_URL="YOUR_SERVER" ghcr.io/eclipse-autowrx/sdv-runtime:latest
 ```
 
 - Run your runtime with the local self manager. In this case everything stay in localhost, no external connection.
 ```
-docker run -d -e RUNTIME_NAME="MyRuntimeName" -e SYNCER_SERVER_URL="http://localhost:3090" -p 3090:3090 ghcr.io/eclipse-autowrx/sdv-runtime:latest
+docker run -d --restart=always -e RUNTIME_NAME="MyRuntimeName" -e SYNCER_SERVER_URL="http://localhost:3090" -p 3090:3090 ghcr.io/eclipse-autowrx/sdv-runtime:latest
 ```
 
 
@@ -100,10 +102,10 @@ docker buildx build --platform linux/amd64 -t local001 -f Dockerfile .
 
 ### Run local image
 ```shell
-docker run -d -e RUNTIME_NAME="bbb" -p 55555:55555 docker.io/library/local001
+docker run -d --restart=always -e RUNTIME_NAME="bbb" -p 55555:55555 docker.io/library/local001
 
 # with mount point
-docker run -d -e RUNTIME_NAME="bbb" -v /home/nhan/dev/tmp:/home/dev/data -p 55555:55555 docker.io/library/local001
+docker run -d --restart=always -e RUNTIME_NAME="bbb" -v /home/nhan/dev/tmp:/home/dev/data -p 55555:55555 docker.io/library/local001
 
 # access docker bash
 docker exec -it <container_name_or_id> bash

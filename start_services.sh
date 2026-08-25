@@ -27,7 +27,10 @@ log_kit_manager_container() {
 
 terminate_children() {
     signal=$1
-    log_kit_manager_container "CONTAINER_SIGNAL" "signal=$signal kitManagerPid=${KIT_MANAGER_PID:-} databrokerPid=${DATABROKER_PID:-} syncerPid=${SYNCER_PID:-}"
+    # Signal-driven shutdown defaults to 0. Natural kit-manager death passes
+    # through the child's exit code so Docker restart/alert policies can see it.
+    final_exit=${2:-0}
+    log_kit_manager_container "CONTAINER_SIGNAL" "signal=$signal kitManagerPid=${KIT_MANAGER_PID:-} databrokerPid=${DATABROKER_PID:-} syncerPid=${SYNCER_PID:-} finalExit=$final_exit"
 
     if [ -n "${KIT_MANAGER_PID:-}" ] && kill -0 "$KIT_MANAGER_PID" 2>/dev/null; then
         kill "-$signal" "$KIT_MANAGER_PID" 2>/dev/null || true
@@ -55,8 +58,8 @@ terminate_children() {
     if [ -n "${MOCK_PROVIDER_PID:-}" ] && kill -0 "$MOCK_PROVIDER_PID" 2>/dev/null; then
         kill -KILL "$MOCK_PROVIDER_PID" 2>/dev/null || true
     fi
-    log_kit_manager_container "CONTAINER_EXIT" "signal=$signal"
-    exit 0
+    log_kit_manager_container "CONTAINER_EXIT" "signal=$signal finalExit=$final_exit"
+    exit "$final_exit"
 }
 
 trap 'terminate_children TERM' TERM
@@ -109,4 +112,4 @@ done
 wait "$KIT_MANAGER_PID" 2>/dev/null
 KIT_MANAGER_EXIT_CODE=$?
 log_kit_manager_container "KIT_MANAGER_CHILD_EXITED" "kitManagerPid=$KIT_MANAGER_PID exitCode=$KIT_MANAGER_EXIT_CODE"
-terminate_children TERM
+terminate_children TERM "$KIT_MANAGER_EXIT_CODE"

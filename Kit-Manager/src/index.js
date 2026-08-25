@@ -51,7 +51,10 @@ const parseBoolFlag = (value, defaultOn) => {
     return true
 }
 
-const KIT_MAX_HTTP_BUFFER_SIZE = parsePositiveInt(process.env.KIT_MAX_HTTP_BUFFER_SIZE, 2_000_000)
+// Express JSON body limit (raises the ~100KB default so /convertCode accepts larger snippets).
+const KIT_MAX_HTTP_JSON_SIZE = parsePositiveInt(process.env.KIT_MAX_HTTP_JSON_SIZE, 2_000_000)
+// Socket.IO payload limit — keep the historical ~100MB default so large deploys are not rejected.
+const KIT_MAX_HTTP_BUFFER_SIZE = parsePositiveInt(process.env.KIT_MAX_HTTP_BUFFER_SIZE, 1e8)
 const KIT_OFFLINE_TTL_MS = parsePositiveInt(process.env.KIT_OFFLINE_TTL_MS, 60 * 60 * 1000)
 const KIT_OFFLINE_SWEEP_INTERVAL_MS = parsePositiveInt(process.env.KIT_OFFLINE_SWEEP_INTERVAL_MS, 5 * 60 * 1000)
 const KIT_HEAP_WARN_MB = parsePositiveInt(process.env.KIT_HEAP_WARN_MB, 1024)
@@ -63,8 +66,8 @@ const KIT_ALERT_MIN_INTERVAL_MS = parsePositiveInt(process.env.KIT_ALERT_MIN_INT
 const MEMORY_PRESSURE_MIN_INTERVAL_MS = 60 * 1000
 
 const app = express();
-app.use(express.json({ limit: KIT_MAX_HTTP_BUFFER_SIZE }));
-app.use(express.urlencoded({ extended: true, limit: KIT_MAX_HTTP_BUFFER_SIZE }));
+app.use(express.json({ limit: KIT_MAX_HTTP_JSON_SIZE }));
+app.use(express.urlencoded({ extended: true, limit: KIT_MAX_HTTP_JSON_SIZE }));
 const server = http.createServer(app);
 const io = new Server(server, {
     maxHttpBufferSize: KIT_MAX_HTTP_BUFFER_SIZE,
@@ -1003,7 +1006,7 @@ io.on('connection', (socket) => {
 
     // ------------ MESSAGE FROM KIT TO CLIENT ----------------
     socket.on('broadcastToClient', (payload) => {
-        if(!payload || !payload.cmd || payload.kit_id) {
+        if(!payload || !payload.cmd || !payload.kit_id) {
             log('warn', 'BROADCAST_TO_CLIENT_INVALID', {
                 socketId: socket.id,
                 hasPayload: Boolean(payload),
