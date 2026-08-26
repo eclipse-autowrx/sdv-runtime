@@ -6,10 +6,10 @@
 FROM ubuntu:22.04 AS target-amd64
 ENV BUILDTARGET="x86_64-unknown-linux-musl"
 COPY --chmod=0755 bin/amd64/databroker-amd64 /app/databroker
-COPY --chmod=0755 bin/amd64/node-km-x64 /home/dev/ws/kit-manager/node-km
 
 RUN groupadd -r sdvr && useradd -r -g sdvr dev \
     && chown -R dev:sdvr /app/databroker \
+    && mkdir -p /home/dev/ws/kit-manager \
     && chown -R dev:sdvr /home/dev/ && chmod -R u+w /home/dev/ \
     && for i in 1 2 3; do apt-get update && apt-get install -y --no-install-recommends python3 mosquitto ca-certificates python-is-python3 python3-pip nano git && break || sleep 5; done \
     && apt-get clean \
@@ -19,14 +19,24 @@ RUN groupadd -r sdvr && useradd -r -g sdvr dev \
 FROM ubuntu:22.04 AS target-arm64
 ENV BUILDTARGET="aarch64-unknown-linux-musl"
 COPY --chmod=0755 bin/arm64/databroker-arm64 /app/databroker
-COPY --chmod=0755 bin/arm64/node-km-arm64 /home/dev/ws/kit-manager/node-km
 
 RUN groupadd -r sdvr && useradd -r -g sdvr dev \
     && chown -R dev:sdvr /app/databroker \
+    && mkdir -p /home/dev/ws/kit-manager \
     && chown -R dev:sdvr /home/dev/ && chmod -R u+w /home/dev/ \
     && for i in 1 2 3; do apt-get update && apt-get install -y --no-install-recommends python3 mosquitto ca-certificates python-is-python3 python3-pip nano git && break || sleep 5; done \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* 
+
+
+# Kit-Manager builder stage: install Node dependencies on Linux to avoid
+# carrying any Windows-built node_modules into the final image.
+FROM node:20-bullseye AS kit-manager-builder
+WORKDIR /build/kit-manager
+COPY Kit-Manager/package.json Kit-Manager/package-lock.json ./
+RUN npm ci --omit=dev
+COPY Kit-Manager/configs.js ./
+COPY Kit-Manager/src ./src
 
 # Python builder stage to create the package environment
 FROM ubuntu:22.04 AS python-builder
@@ -80,9 +90,15 @@ RUN cp -r vehicle_signal_specification /home/dev/python-packages/ \
 # Now adding generic parts
 FROM target-$TARGETARCH AS target
 ARG TARGETARCH
+ARG KIT_IMAGE_VERSION=unknown
+ENV KIT_IMAGE_VERSION=$KIT_IMAGE_VERSION
 
 # Copy Python packages from builder stage
 COPY --from=python-builder --chown=dev:sdvr /home/dev/python-packages /home/dev/python-packages
+
+# Copy Node.js runtime and Kit-Manager source from kit-manager-builder
+COPY --from=kit-manager-builder /usr/local/bin/node /usr/local/bin/node
+COPY --from=kit-manager-builder --chown=dev:sdvr /build/kit-manager /home/dev/ws/kit-manager
 
 # Copy other necessary files
 COPY --chown=dev:sdvr --chmod=0755 data/vss-core/vss.json /home/dev/ws/vss.json
@@ -92,6 +108,7 @@ COPY --chown=dev:sdvr --chmod=0755 kuksa-syncer /home/dev/ws/kuksa-syncer/
 COPY --chown=dev:sdvr --chmod=0755 mock /home/dev/ws/mock/
 COPY mosquitto-no-auth.conf /etc/mosquitto/mosquitto-no-auth.conf
 COPY --chown=dev:sdvr --chmod=0755 start_services.sh /start_services.sh
+RUN sed -i 's/\r$//' /start_services.sh
 
 ENV PYTHONPATH="/home/dev/python-packages/:${PYTHONPATH}"
 
@@ -117,6 +134,7 @@ ENV KIT_MANAGER_PORT=3090
 ENV KUKSA_DATABROKER_METADATA_FILE=/home/dev/ws/vss.json
 ENV RUNTIME_PREFIX="Runtime-"
 EXPOSE $KUKSA_DATABROKER_PORT $KIT_MANAGER_PORT
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD node -e "const http=require('http');const port=process.env.KIT_MANAGER_PORT||3090;const req=http.get({host:'127.0.0.1',port,path:'/healthz',timeout:3000},res=>{res.resume();process.exit(res.statusCode===200?0:1)});req.on('timeout',()=>req.destroy(new Error('timeout')));req.on('error',()=>process.exit(1));"
 
 RUN mkdir /home/dev/data
 RUN chown -R dev /home/dev/data
