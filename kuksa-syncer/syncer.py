@@ -85,6 +85,142 @@ async def send_app_deploy_reply(master_id, content, is_finish, cmd="deploy-reque
         "is_finish": is_finish
     })
 
+async def handle_read_file(request_from, file_path, reply_cmd='read-file'):
+    """Handle read-file/read_file and return file content."""
+    try:
+        print(f'[handle_read_file] Reading file: {file_path}', flush=True)
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        if reply_cmd == 'read-file':
+            await sio.emit("messageToKit-kitReply", {
+                "cmd": "read-file",
+                "kit_id": CLIENT_ID,
+                "request_from": request_from,
+                "result": content,
+                "has_error": False,
+                "file_path": file_path
+            })
+        else:
+            await sio.emit("messageToKit-kitReply", {
+                "kit_id": CLIENT_ID,
+                "request_from": request_from,
+                "cmd": "read_file",
+                "result": "Success",
+                "data": {
+                    "path": file_path,
+                    "content": content
+                }
+            })
+        print(f'[handle_read_file] Successfully read {file_path} ({len(content)} bytes)', flush=True)
+
+    except FileNotFoundError:
+        print(f'[handle_read_file] File not found: {file_path}', flush=True)
+        if reply_cmd == 'read-file':
+            await sio.emit("messageToKit-kitReply", {
+                "cmd": "read-file",
+                "kit_id": CLIENT_ID,
+                "request_from": request_from,
+                "result": f'File not found: {file_path}',
+                "has_error": True,
+                "file_path": file_path
+            })
+        else:
+            await sio.emit("messageToKit-kitReply", {
+                "kit_id": CLIENT_ID,
+                "request_from": request_from,
+                "cmd": "read_file",
+                "result": f'File not found: {file_path}',
+                "data": {
+                    "path": file_path,
+                    "content": ""
+                }
+            })
+
+    except Exception as e:
+        print(f'[handle_read_file] Error reading file: {e}', flush=True)
+        if reply_cmd == 'read-file':
+            await sio.emit("messageToKit-kitReply", {
+                "cmd": "read-file",
+                "kit_id": CLIENT_ID,
+                "request_from": request_from,
+                "result": f'Error reading file: {str(e)}',
+                "has_error": True,
+                "file_path": file_path
+            })
+        else:
+            await sio.emit("messageToKit-kitReply", {
+                "kit_id": CLIENT_ID,
+                "request_from": request_from,
+                "cmd": "read_file",
+                "result": f'Error reading file: {str(e)}',
+                "data": {
+                    "path": file_path,
+                    "content": ""
+                }
+            })
+
+async def handle_write_file(request_from, file_data, reply_cmd='write-file'):
+    """Handle write-file/write_file and persist content to disk."""
+    try:
+        if not isinstance(file_data, dict):
+            await sio.emit("messageToKit-kitReply", {
+                "kit_id": CLIENT_ID,
+                "request_from": request_from,
+                "cmd": reply_cmd,
+                "result": "Invalid payload: expected object in data"
+            })
+            return
+
+        file_path = file_data.get('path')
+        content = file_data.get('content', '')
+
+        if not file_path:
+            await sio.emit("messageToKit-kitReply", {
+                "kit_id": CLIENT_ID,
+                "request_from": request_from,
+                "cmd": reply_cmd,
+                "result": "No file path provided"
+            })
+            return
+
+        if content is None:
+            content = ''
+        elif not isinstance(content, str):
+            content = str(content)
+
+        content = content.replace('\r\n', '\n').replace('\r', '\n').rstrip('\n')
+
+        print(f'[handle_write_file] Writing file: {file_path}', flush=True)
+
+        parent_dir = os.path.dirname(file_path)
+        if parent_dir:
+            os.makedirs(parent_dir, exist_ok=True)
+
+        with open(file_path, 'w', encoding='utf-8', newline='') as f:
+            f.write(content)
+
+        await sio.emit("messageToKit-kitReply", {
+            "kit_id": CLIENT_ID,
+            "request_from": request_from,
+            "cmd": reply_cmd,
+            "result": "Success",
+            "data": {
+                "path": file_path,
+                "bytes_written": len(content.encode('utf-8'))
+            }
+        })
+        print(f'[handle_write_file] Successfully wrote {file_path}', flush=True)
+
+    except Exception as e:
+        print(f'[handle_write_file] Error writing file: {e}', flush=True)
+        await sio.emit("messageToKit-kitReply", {
+            "kit_id": CLIENT_ID,
+            "request_from": request_from,
+            "cmd": reply_cmd,
+            "result": f'Error writing file: {str(e)}'
+        })
+
 main_loop = None
 
 def process_done(master_id: str, retcode: int):
@@ -557,6 +693,63 @@ async def messageToKit(data):
             
         })
         return 0
+
+    elif data["cmd"] in ("read-file", "read_file"):
+        cmd = data["cmd"]
+        request_from = data["request_from"]
+        file_data = data.get("data")
+        if isinstance(file_data, dict):
+            file_path = file_data.get("path") or file_data.get("file_path")
+        else:
+            file_path = file_data
+        if (not file_path) and data.get("file_path"):
+            file_path = data.get("file_path")
+        if file_path:
+            await handle_read_file(request_from, file_path, reply_cmd=cmd)
+        else:
+            print(f'[messageToKit] {cmd}: no file path provided', flush=True)
+            if cmd == "read-file":
+                await sio.emit("messageToKit-kitReply", {
+                    "cmd": "read-file",
+                    "kit_id": CLIENT_ID,
+                    "request_from": request_from,
+                    "result": "No file path provided",
+                    "has_error": True
+                })
+            else:
+                await sio.emit("messageToKit-kitReply", {
+                    "kit_id": CLIENT_ID,
+                    "request_from": request_from,
+                    "cmd": "read_file",
+                    "result": "No file path provided"
+                })
+        return 0
+
+    elif data["cmd"] in ("write-file", "write_file"):
+        cmd = data["cmd"]
+        request_from = data["request_from"]
+        file_data = data.get("data")
+        normalized_file_data = file_data if isinstance(file_data, dict) else {}
+
+        file_path = (
+            normalized_file_data.get("path")
+            or normalized_file_data.get("file_path")
+            or data.get("file_path")
+        )
+
+        if "content" in normalized_file_data:
+            file_content = normalized_file_data.get("content")
+        elif "file_content" in normalized_file_data:
+            file_content = normalized_file_data.get("file_content")
+        else:
+            file_content = data.get("file_content", "")
+
+        await handle_write_file(request_from, {
+            "path": file_path,
+            "content": file_content
+        }, reply_cmd=cmd)
+        return 0
+
     return 1
 
 def convertLsOfRunnerToJson(lsOfRunner):

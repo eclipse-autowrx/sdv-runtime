@@ -123,6 +123,12 @@ RUN ln -s /home/dev/python-packages/velocitas_sdk /home/dev/python-packages/sdv 
     #&& mv /home/dev/ws/kuksa-syncer/__pycache__/syncer.cpython-310.pyc /home/dev/ws/kuksa-syncer/syncer.pyc \
     #&& find /home/dev/ws/kuksa-syncer/ -mindepth 1 ! -name 'syncer.pyc' ! -name 'subpiper' ! -path '/home/dev/ws/kuksa-syncer/subpiper/*' -delete
 
+# Hardware Kit Manager reads/writes these paths via read-file / write-file
+RUN mkdir -p /app/remote_access \
+    && ln -sf /home/dev/ws/vss.json /app/remote_access/vss.json \
+    && printf '%s\n' '{}' > /app/remote_access/signal-config.json \
+    && chown -R dev:sdvr /app/remote_access
+
 USER dev
 
 ENV ENVIRONMENT="prototype"
