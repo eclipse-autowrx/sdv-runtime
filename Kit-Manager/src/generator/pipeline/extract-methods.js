@@ -39,7 +39,11 @@ class ExtractMethodsStep extends pipeline_base_1.PipelineStep {
         methodStartIndexArray.forEach((methodStartIndex) => {
             const tempMethods = [];
             const tempModifiedMethods = [];
-            for (let index = methodStartIndex; /\S/.test(context.codeSnippetStringArray[index]); index++) {
+            for (let index = methodStartIndex;
+                 index < context.codeSnippetStringArray.length
+                 && context.codeSnippetStringArray[index] != null
+                 && /\S/.test(context.codeSnippetStringArray[index]);
+                 index++) {
                 tempMethods.push(context.codeSnippetStringArray[index]);
                 if (context.codeSnippetStringArray[index].includes(codeConstants_1.PYTHON.SYNC_METHOD_START)) {
                     let methodLine;
@@ -66,7 +70,7 @@ class ExtractMethodsStep extends pipeline_base_1.PipelineStep {
         return modifiedMethodArray;
     }
     mapSubscriptionCallbackForVelocitas(codeSnippetStringArray, index) {
-        var _a, _b;
+        var _a, _b, _c;
         const methodString = codeSnippetStringArray[index];
         let methodName;
         let vssSignal;
@@ -75,7 +79,8 @@ class ExtractMethodsStep extends pipeline_base_1.PipelineStep {
         if (vssSignal === null || vssSignal === void 0 ? void 0 : vssSignal.startsWith(`${codeConstants_1.PYTHON.AWAIT} `)) {
             vssSignal = vssSignal.split(`${codeConstants_1.PYTHON.AWAIT} `)[1];
         }
-        const callBackVariable = methodString.split(`(`)[1].split(`:`)[0].split(`)`)[0];
+        const argSegment = (_c = methodString === null || methodString === void 0 ? void 0 : methodString.split(`(`)[1]) !== null && _c !== void 0 ? _c : '';
+        const callBackVariable = argSegment.split(`:`)[0].split(`)`)[0];
         const subscriptionCallbackVariableLine = (0, helpers_1.indentCodeSnippet)(`${callBackVariable} = data.get(${vssSignal}).value`, codeConstants_1.INDENTATION.COUNT_CLASS);
         return subscriptionCallbackVariableLine;
     }
@@ -86,7 +91,8 @@ class ExtractMethodsStep extends pipeline_base_1.PipelineStep {
                 (!codeSnippet.includes(`.${variableName}`) ||
                     !codeSnippet.includes(`${variableName}"`) ||
                     !codeSnippet.includes(`"${variableName}`))) {
-                const re = new RegExp(`(?<![\\.\\"])${variableName}(?![\\.\\"])`, 'g');
+                const safeName = (0, helpers_1.escapeRegex)(variableName);
+                const re = new RegExp(`(?<![\\.\\"])${safeName}(?![\\.\\"])`, 'g');
                 codeSnippet = codeSnippet.replace(re, `self.${variableName}`);
             }
         });

@@ -44,7 +44,8 @@ class CreateCodeSnippetForTemplateStep extends pipeline_base_1.PipelineStep {
                 //     context.codeSnippetStringArray[index] = `self.${stringElement}`;
                 // }
                 if (stringElement.includes(`, ${variableName}`)) {
-                    const re = new RegExp(`(?<!")${variableName}(?!")`, 'g');
+                    const safeName = (0, helpers_1.escapeRegex)(variableName);
+                    const re = new RegExp(`(?<!")${safeName}(?!")`, 'g');
                     context.codeSnippetStringArray[index] = stringElement.replace(re, `self.${variableName}`);
                 }
                 if (stringElement.includes(`${variableName} <=`) ||
