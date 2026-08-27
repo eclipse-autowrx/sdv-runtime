@@ -57,6 +57,9 @@ class ConvertError extends Error {
 let inFlightConverts = 0;
 const getInFlightConverts = () => inFlightConverts;
 
+// Guards async-stage hangs only: while runWithPayload is synchronously churning through
+// its regex/array pipeline, the event loop is blocked and this timer cannot fire. The
+// real bound on pathological CPU-bound input is MAX_CODE_BYTES above, not this timeout.
 const withTimeout = (promise, ms, code) => {
     let timer;
     const timeoutPromise = new Promise((_, reject) => {
