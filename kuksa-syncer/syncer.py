@@ -85,6 +85,253 @@ async def send_app_deploy_reply(master_id, content, is_finish, cmd="deploy-reque
         "is_finish": is_finish
     })
 
+# Hardware Kit Manager remote-access jail. Leaf may be a symlink (vss.json →
+# databroker metadata); path confinement uses realpath on the parent and an
+# explicit allow for that known metadata target so traversal cannot escape.
+REMOTE_ACCESS_ROOT = '/app/remote_access'
+VSS_METADATA_FILE = os.environ.get('KUKSA_DATABROKER_METADATA_FILE', '/home/dev/ws/vss.json')
+
+
+def _is_under_directory(path, directory):
+    try:
+        return os.path.commonpath([path, directory]) == directory
+    except ValueError:
+        return False
+
+
+def resolve_remote_access_path(file_path):
+    """Return a confined path under /app/remote_access, or raise ValueError."""
+    if not file_path or not isinstance(file_path, str):
+        raise ValueError('No file path provided')
+
+    root = os.path.realpath(REMOTE_ACCESS_ROOT)
+    abs_path = os.path.abspath(file_path)
+    parent = os.path.dirname(abs_path)
+    name = os.path.basename(abs_path)
+    if not name or name in ('.', '..'):
+        raise ValueError('Invalid file path')
+
+    real_parent = os.path.realpath(parent)
+    if not _is_under_directory(real_parent, root):
+        raise ValueError(f'Path outside {REMOTE_ACCESS_ROOT}')
+
+    confined = os.path.join(real_parent, name)
+    if os.path.lexists(confined):
+        real_leaf = os.path.realpath(confined)
+        allowed_vss = os.path.realpath(VSS_METADATA_FILE)
+        if not _is_under_directory(real_leaf, root) and real_leaf != allowed_vss:
+            raise ValueError(f'Path outside {REMOTE_ACCESS_ROOT}')
+    return confined
+
+
+def _file_op_audit(data):
+    prototype = data.get('prototype') if isinstance(data, dict) else None
+    prototype_id = ''
+    prototype_name = ''
+    if isinstance(prototype, dict):
+        prototype_id = prototype.get('id') or ''
+        prototype_name = prototype.get('name') or ''
+    return {
+        'username': data.get('username') if isinstance(data, dict) else None,
+        'prototype_id': prototype_id,
+        'prototype_name': prototype_name,
+    }
+
+
+async def handle_read_file(request_from, file_path, reply_cmd='read-file', audit=None):
+    """Handle read-file/read_file and return file content."""
+    audit = audit or {}
+    try:
+        confined_path = resolve_remote_access_path(file_path)
+        print(
+            f'[handle_read_file] Reading file: {confined_path} '
+            f'(requested={file_path} username={audit.get("username")} '
+            f'prototype={audit.get("prototype_name")}/{audit.get("prototype_id")})',
+            flush=True,
+        )
+        with open(confined_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        if reply_cmd == 'read-file':
+            await sio.emit("messageToKit-kitReply", {
+                "cmd": "read-file",
+                "kit_id": CLIENT_ID,
+                "request_from": request_from,
+                "result": content,
+                "has_error": False,
+                "file_path": confined_path
+            })
+        else:
+            await sio.emit("messageToKit-kitReply", {
+                "kit_id": CLIENT_ID,
+                "request_from": request_from,
+                "cmd": "read_file",
+                "result": "Success",
+                "data": {
+                    "path": confined_path,
+                    "content": content
+                }
+            })
+        print(f'[handle_read_file] Successfully read {confined_path} ({len(content)} bytes)', flush=True)
+
+    except ValueError as e:
+        print(f'[handle_read_file] Rejected path: {file_path} ({e})', flush=True)
+        if reply_cmd == 'read-file':
+            await sio.emit("messageToKit-kitReply", {
+                "cmd": "read-file",
+                "kit_id": CLIENT_ID,
+                "request_from": request_from,
+                "result": str(e),
+                "has_error": True,
+                "file_path": file_path
+            })
+        else:
+            await sio.emit("messageToKit-kitReply", {
+                "kit_id": CLIENT_ID,
+                "request_from": request_from,
+                "cmd": "read_file",
+                "result": str(e),
+                "data": {
+                    "path": file_path,
+                    "content": ""
+                }
+            })
+
+    except FileNotFoundError:
+        print(f'[handle_read_file] File not found: {file_path}', flush=True)
+        if reply_cmd == 'read-file':
+            await sio.emit("messageToKit-kitReply", {
+                "cmd": "read-file",
+                "kit_id": CLIENT_ID,
+                "request_from": request_from,
+                "result": f'File not found: {file_path}',
+                "has_error": True,
+                "file_path": file_path
+            })
+        else:
+            await sio.emit("messageToKit-kitReply", {
+                "kit_id": CLIENT_ID,
+                "request_from": request_from,
+                "cmd": "read_file",
+                "result": f'File not found: {file_path}',
+                "data": {
+                    "path": file_path,
+                    "content": ""
+                }
+            })
+
+    except Exception as e:
+        print(f'[handle_read_file] Error reading file: {e}', flush=True)
+        if reply_cmd == 'read-file':
+            await sio.emit("messageToKit-kitReply", {
+                "cmd": "read-file",
+                "kit_id": CLIENT_ID,
+                "request_from": request_from,
+                "result": f'Error reading file: {str(e)}',
+                "has_error": True,
+                "file_path": file_path
+            })
+        else:
+            await sio.emit("messageToKit-kitReply", {
+                "kit_id": CLIENT_ID,
+                "request_from": request_from,
+                "cmd": "read_file",
+                "result": f'Error reading file: {str(e)}',
+                "data": {
+                    "path": file_path,
+                    "content": ""
+                }
+            })
+
+async def handle_write_file(request_from, file_data, reply_cmd='write-file', audit=None):
+    """Handle write-file/write_file and persist content to disk."""
+    audit = audit or {}
+    file_path = None
+    try:
+        if not isinstance(file_data, dict):
+            await sio.emit("messageToKit-kitReply", {
+                "kit_id": CLIENT_ID,
+                "request_from": request_from,
+                "cmd": reply_cmd,
+                "result": "Invalid payload: expected object in data",
+                "has_error": True,
+            })
+            return
+
+        file_path = file_data.get('path')
+        content = file_data.get('content', '')
+
+        if not file_path:
+            await sio.emit("messageToKit-kitReply", {
+                "kit_id": CLIENT_ID,
+                "request_from": request_from,
+                "cmd": reply_cmd,
+                "result": "No file path provided",
+                "has_error": True,
+            })
+            return
+
+        confined_path = resolve_remote_access_path(file_path)
+
+        if content is None:
+            content = ''
+        elif not isinstance(content, str):
+            content = str(content)
+
+        content = content.replace('\r\n', '\n').replace('\r', '\n').rstrip('\n')
+
+        print(
+            f'[handle_write_file] Writing file: {confined_path} '
+            f'(requested={file_path} username={audit.get("username")} '
+            f'prototype={audit.get("prototype_name")}/{audit.get("prototype_id")})',
+            flush=True,
+        )
+
+        parent_dir = os.path.dirname(confined_path)
+        if parent_dir:
+            # Parent is already realpath-confined under REMOTE_ACCESS_ROOT.
+            os.makedirs(parent_dir, exist_ok=True)
+
+        with open(confined_path, 'w', encoding='utf-8', newline='') as f:
+            f.write(content)
+
+        reply = {
+            "kit_id": CLIENT_ID,
+            "request_from": request_from,
+            "cmd": reply_cmd,
+            "result": "Success",
+            "has_error": False,
+            "file_path": confined_path,
+            "data": {
+                "path": confined_path,
+                "bytes_written": len(content.encode('utf-8'))
+            }
+        }
+        await sio.emit("messageToKit-kitReply", reply)
+        print(f'[handle_write_file] Successfully wrote {confined_path}', flush=True)
+
+    except ValueError as e:
+        print(f'[handle_write_file] Rejected path: {file_path} ({e})', flush=True)
+        await sio.emit("messageToKit-kitReply", {
+            "kit_id": CLIENT_ID,
+            "request_from": request_from,
+            "cmd": reply_cmd,
+            "result": str(e),
+            "has_error": True,
+            "file_path": file_path,
+        })
+
+    except Exception as e:
+        print(f'[handle_write_file] Error writing file: {e}', flush=True)
+        await sio.emit("messageToKit-kitReply", {
+            "kit_id": CLIENT_ID,
+            "request_from": request_from,
+            "cmd": reply_cmd,
+            "result": f'Error writing file: {str(e)}',
+            "has_error": True,
+            "file_path": file_path,
+        })
+
 main_loop = None
 
 def process_done(master_id: str, retcode: int):
@@ -557,6 +804,65 @@ async def messageToKit(data):
             
         })
         return 0
+
+    elif data["cmd"] in ("read-file", "read_file"):
+        cmd = data["cmd"]
+        request_from = data["request_from"]
+        audit = _file_op_audit(data)
+        file_data = data.get("data")
+        if isinstance(file_data, dict):
+            file_path = file_data.get("path") or file_data.get("file_path")
+        else:
+            file_path = file_data
+        if (not file_path) and data.get("file_path"):
+            file_path = data.get("file_path")
+        if file_path:
+            await handle_read_file(request_from, file_path, reply_cmd=cmd, audit=audit)
+        else:
+            print(f'[messageToKit] {cmd}: no file path provided', flush=True)
+            if cmd == "read-file":
+                await sio.emit("messageToKit-kitReply", {
+                    "cmd": "read-file",
+                    "kit_id": CLIENT_ID,
+                    "request_from": request_from,
+                    "result": "No file path provided",
+                    "has_error": True
+                })
+            else:
+                await sio.emit("messageToKit-kitReply", {
+                    "kit_id": CLIENT_ID,
+                    "request_from": request_from,
+                    "cmd": "read_file",
+                    "result": "No file path provided"
+                })
+        return 0
+
+    elif data["cmd"] in ("write-file", "write_file"):
+        cmd = data["cmd"]
+        request_from = data["request_from"]
+        audit = _file_op_audit(data)
+        file_data = data.get("data")
+        normalized_file_data = file_data if isinstance(file_data, dict) else {}
+
+        file_path = (
+            normalized_file_data.get("path")
+            or normalized_file_data.get("file_path")
+            or data.get("file_path")
+        )
+
+        if "content" in normalized_file_data:
+            file_content = normalized_file_data.get("content")
+        elif "file_content" in normalized_file_data:
+            file_content = normalized_file_data.get("file_content")
+        else:
+            file_content = data.get("file_content", "")
+
+        await handle_write_file(request_from, {
+            "path": file_path,
+            "content": file_content
+        }, reply_cmd=cmd, audit=audit)
+        return 0
+
     return 1
 
 def convertLsOfRunnerToJson(lsOfRunner):

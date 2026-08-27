@@ -106,8 +106,11 @@ const convertPgCode = async (appName, code, vss_payload) => {
             console.log(err)
         }
         return null
+    } catch (error) {
+        console.log("error on generateCode", error)
+        throw error;
     } finally {
-        inFlightConverts -= 1;
+        inFlightConverts = Math.max(0, inFlightConverts - 1)
     }
 }
 
